@@ -10,6 +10,7 @@ Vaul is a library designed to help developers create tool calls for AI systems, 
 - [Usage](#usage)
   - [Defining Tool Calls](#defining-tool-calls)
   - [Interacting with OpenAI](#interacting-with-openai)
+  - [More Complex Examples](#more-complex-examples)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -104,6 +105,286 @@ print(add_numbers.from_response(response))
 # Output:
 # 4
 ```
+
+### More Complex Examples
+Let's take a look at how you might handle a more complex application, such as one that integrates multiple potential tool calls:
+
+```python
+import os
+
+from jira import JIRA
+from openai import OpenAI
+from vaul import tool_call
+
+from dotenv import load_dotenv
+
+load_dotenv('.env')
+
+jira = JIRA(
+    server=os.environ.get("JIRA_URL"),
+    basic_auth=(
+        os.environ.get("JIRA_USER"),
+        os.environ.get("JIRA_API_TOKEN")
+    )
+)
+
+openai_session = OpenAI(
+    api_key=os.environ.get("OPENAI_API_KEY")
+)
+
+
+@tool_call
+def create_issue(summary: str, description: str, issue_type: str) -> dict:
+    """
+    Creates a Jira issue.
+    :param summary: The issue summary
+    :param description: The issue description
+    :param issue_type: The issue type
+    :return: The created issue
+    """
+    try:
+        new_issue = jira.create_issue(
+            fields={
+                "project": {"key": "KAN"},
+                "summary": summary,
+                "description": description,
+                "issuetype": {"name": issue_type}
+            }
+        )
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
+    return {
+        "id": new_issue.id,
+        "key": new_issue.key,
+        "summary": new_issue.fields.summary,
+        "description": new_issue.fields.description,
+        "type": new_issue.fields.issuetype.name
+    }
+
+
+@tool_call
+def get_issue(issue_id: str) -> dict:
+    """
+    Gets a Jira issue by ID.
+    :param issue_id: The issue ID
+    :return: The issue
+    """
+
+    try:
+        issue = jira.issue(issue_id)
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
+    return {
+        "id": issue.id,
+        "key": issue.key,
+        "summary": issue.fields.summary,
+        "description": issue.fields.description,
+        "type": issue.fields.issuetype.name
+    }
+
+
+@tool_call
+def get_issues(project: str) -> dict:
+    """
+    Gets all issues in a project.
+    :param project: The project key
+    :return: The issues
+    """
+    try:
+        issues = jira.search_issues(f"project={project}")
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
+    return {
+        "issues": [
+            {
+                "id": issue.id,
+                "key": issue.key,
+                "summary": issue.fields.summary,
+                "description": issue.fields.description,
+                "type": issue.fields.issuetype.name
+            } for issue in issues
+        ]
+    }
+
+
+@tool_call
+def update_issue(issue_id: str, summary: str, description: str, issue_type: str) -> dict:
+    """
+    Updates a Jira issue.
+    :param issue_id: The issue ID
+    :param summary: The issue summary
+    :param description: The issue description
+    :param issue_type: The issue type
+    :return: The updated issue
+    """
+    try:
+        issue = jira.issue(issue_id)
+
+        fields = {
+            "summary": summary if summary else issue.fields.summary,
+            "description": description if description else issue.fields.description,
+            "issuetype": {"name": issue_type if issue_type else issue.fields.issuetype.name}
+        }
+
+        issue.update(fields=fields)
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
+    return {
+        "id": issue.id,
+        "key": issue.key,
+        "summary": issue.fields.summary,
+        "description": issue.fields.description,
+        "type": issue.fields.issuetype.name
+    }
+
+
+@tool_call
+def delete_issue(issue_id: str) -> dict:
+    """
+    Deletes a Jira issue.
+    :param issue_id: The issue ID
+    """
+    try:
+        jira.issue(issue_id).delete()
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
+    return {
+        "message": "Issue deleted successfully"
+    }
+
+
+@tool_call
+def get_issue_transitions(issue_id: str) -> dict:
+    """
+    Gets the transitions for a Jira issue.
+    :param issue_id: The issue ID
+    :return: The transitions
+    """
+    try:
+        transitions = jira.transitions(issue_id)
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
+    return {
+        'transitions': [
+            {
+                'id': transition['id'],
+                'name': transition['name']
+            } for transition in transitions
+        ]
+    }
+
+
+@tool_call
+def transition_issue(issue_id: str, transition_id: str) -> dict:
+    """
+    Transitions a Jira issue.
+    :param issue_id: The issue ID
+    :param transition_id: The transition ID
+    :return: The transition result
+    """
+    try:
+        jira.transition_issue(issue_id, transition_id)
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
+    return {
+        "message": "Issue transitioned successfully"
+    }
+
+
+@tool_call
+def get_issue_comments(issue_id: str) -> dict:
+    """
+    Gets the comments for a Jira issue.
+    :param issue_id: The issue ID
+    :return: The comments
+    """
+    try:
+        comments = jira.comments(issue_id)
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
+    return {
+        'comments': [
+            {
+                'id': comment.id,
+                'body': comment.body
+            } for comment in comments
+        ]
+    }
+
+# Define the tools that can be called and map them to the functions
+tools = {
+    'create_issue': create_issue,
+    'get_issue': get_issue,
+    'get_issues': get_issues,
+    'update_issue': update_issue,
+    'delete_issue': delete_issue,
+    'get_issue_transitions': get_issue_transitions,
+    'transition_issue': transition_issue,
+    'get_issue_comments': get_issue_comments
+}
+
+
+# Send a message to the OpenAI API to create a new issue
+response = openai_session.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[
+        {
+            "role": "system",
+            "content": "You are a Jira bot that can create, update, and delete issues. You can also get issue details, transitions, and comments."
+        },
+        {
+            "role": "user",
+            "content": "Create a new issue with the summary 'Test Issue' and the description 'This is a test issue' of type 'Task'."
+        }
+    ],
+    temperature=0.7,
+    top_p=1,
+    stream=False,
+    seed=42,
+    tools=[{
+        "type": "function",
+        "function": value.tool_call_schema
+    } for key, value in tools.items()],
+)
+
+# Identify the tool call, if any
+try:
+    tool_call = response.choices[0].message.tool_calls[0].function.name
+except AttributeError:
+    tool_call = None
+    
+    
+# Run the tool if it exists
+if tool_call and tool_call in tools:
+    tool_run = tools[tool_call].from_response(response, throw_error=False)
+    print(tool_run)
+```
+
+
 
 ## Contributing
 
