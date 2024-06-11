@@ -119,13 +119,13 @@ We welcome contributions from the community! If you would like to contribute to 
 
 ## License
 
-Vaul is licensed under the GNU General Public License v3.0. See the LICENSE file for more information.
+Vaul is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
 
 ### Note on Inspiration
 
-Vaul was created as a way to bring back some of the simplicity and developer experience provided by Jason Liu's `Instructor` package (formerly `openai-function-call`), after specific functionality was removed in newer versions. The goal is to maintain the ease of defining and using tool calls for AI systems, ensuring a smooth developer experience.
+Vaul was created as a way to build on the simplicity and developer experience provided by Jason Liu's excellent `Instructor` package (formerly `openai-function-call`), after the decorator functionality was removed in newer versions. The goal is to maintain the ease of defining and using tool calls for AI systems, ensuring a smooth developer experience.
 
-If you haven't seen `Instructor` before, I highly recommend checking it out:
+If you haven't seen `Instructor` before, I highly recommend checking it out if you're working with structured outputs for AI systems:
 
 - [Instructor on GitHub](https://github.com/jxnl/instructor)
 - [Instructor Documentation](https://python.useinstructor.com/)
