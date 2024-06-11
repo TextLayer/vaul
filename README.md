@@ -268,73 +268,6 @@ def delete_issue(issue_id: str) -> dict:
     }
 
 
-@tool_call
-def get_issue_transitions(issue_id: str) -> dict:
-    """
-    Gets the transitions for a Jira issue.
-    :param issue_id: The issue ID
-    :return: The transitions
-    """
-    try:
-        transitions = jira.transitions(issue_id)
-    except Exception as e:
-        return {
-            "error": str(e)
-        }
-
-    return {
-        'transitions': [
-            {
-                'id': transition['id'],
-                'name': transition['name']
-            } for transition in transitions
-        ]
-    }
-
-
-@tool_call
-def transition_issue(issue_id: str, transition_id: str) -> dict:
-    """
-    Transitions a Jira issue.
-    :param issue_id: The issue ID
-    :param transition_id: The transition ID
-    :return: The transition result
-    """
-    try:
-        jira.transition_issue(issue_id, transition_id)
-    except Exception as e:
-        return {
-            "error": str(e)
-        }
-
-    return {
-        "message": "Issue transitioned successfully"
-    }
-
-
-@tool_call
-def get_issue_comments(issue_id: str) -> dict:
-    """
-    Gets the comments for a Jira issue.
-    :param issue_id: The issue ID
-    :return: The comments
-    """
-    try:
-        comments = jira.comments(issue_id)
-    except Exception as e:
-        return {
-            "error": str(e)
-        }
-
-    return {
-        'comments': [
-            {
-                'id': comment.id,
-                'body': comment.body
-            } for comment in comments
-        ]
-    }
-
 # Define the tools that can be called and map them to the functions
 tools = {
     'create_issue': create_issue,
@@ -342,9 +275,6 @@ tools = {
     'get_issues': get_issues,
     'update_issue': update_issue,
     'delete_issue': delete_issue,
-    'get_issue_transitions': get_issue_transitions,
-    'transition_issue': transition_issue,
-    'get_issue_comments': get_issue_comments
 }
 
 
@@ -361,10 +291,6 @@ response = openai_session.chat.completions.create(
             "content": "Create a new issue with the summary 'Test Issue' and the description 'This is a test issue' of type 'Task'."
         }
     ],
-    temperature=0.7,
-    top_p=1,
-    stream=False,
-    seed=42,
     tools=[{
         "type": "function",
         "function": value.tool_call_schema
@@ -385,6 +311,11 @@ if tool_call and tool_call in tools:
 ```
 
 
+## Roadmap
+- [ ] Add support for other providers (e.g. Anthropic, Cohere, etc.)
+- [ ] Add examples for parallel tool calls
+- [ ] Better error handling and logging
+- [ ] Improved support for types and defaults
 
 ## Contributing
 
