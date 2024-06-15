@@ -56,9 +56,10 @@ class ToolCall(BaseTool):
         }
         schema["properties"] = relevant_properties
 
+        # Update the required field to allow empty arguments
         schema["required"] = sorted(
-            k for k, v in relevant_properties.items() if "default" not in v
-        )
+            k for k, v in relevant_properties.items() if v.get("default", None) is None
+        ) if relevant_properties else []
 
         schema = remove_keys_recursively(schema, "additionalProperties")
         schema = remove_keys_recursively(schema, "title")
@@ -112,4 +113,3 @@ def tool_call(func: Callable) -> ToolCall:
         ToolCall: An instance of the ToolCall class.
     """
     return ToolCall(func)
-
