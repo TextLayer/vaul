@@ -74,6 +74,40 @@ class Toolkit:
         new_row = pd.DataFrame({'name': [tool_name], 'tool': [tool]})
         self._tools_df = pd.concat([self._tools_df, new_row], ignore_index=True)
 
+    def add_tools(self, *tools: ToolCall) -> None:
+        """
+        Register multiple tool call instances in the toolkit at once.
+        
+        Args:
+            *tools: Variable number of ToolCall instances to register
+            
+        Raises:
+            TypeError: If any provided tool is not a ToolCall instance
+            ValueError: If a tool with the same name already exists in the toolkit
+            
+        Example:
+            ```python
+            toolkit = Toolkit()
+            
+            @tool_call
+            def add_numbers(a: int, b: int) -> int:
+                return a + b
+                
+            @tool_call
+            def subtract_numbers(a: int, b: int) -> int:
+                return a - b
+                
+            @tool_call
+            def multiply_numbers(a: int, b: int) -> int:
+                return a * b
+                
+            # Add all tools at once
+            toolkit.add_tools(add_numbers, subtract_numbers, multiply_numbers)
+            ```
+        """
+        for tool in tools:
+            self.add(tool)
+
     def remove(self, name: str) -> bool:
         """
         Unregister a tool by name from the toolkit.
