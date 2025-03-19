@@ -9,6 +9,7 @@ Vaul is a library designed to help developers create tool calls for AI systems, 
 - [Installation](#installation)
 - [Usage](#usage)
   - [Defining Tool Calls](#defining-tool-calls)
+  - [Managing Tool Calls with Toolkit](#managing-tool-calls-with-toolkit)
   - [Interacting with OpenAI](#interacting-with-openai)
   - [More Complex Examples](#more-complex-examples)
 - [Contributing](#contributing)
@@ -46,6 +47,39 @@ from vaul import tool_call
 @tool_call
 def add_numbers(a: int, b: int) -> int:
     return a + b
+```
+
+### Managing Tool Calls with Toolkit
+
+Vaul provides a `Toolkit` class that helps you organize and manage multiple tool calls efficiently:
+
+```python
+from vaul import Toolkit, tool_call
+
+# Create a toolkit to manage your tools
+toolkit = Toolkit()
+
+@tool_call
+def add_numbers(a: int, b: int) -> int:
+    return a + b
+
+@tool_call
+def multiply_numbers(a: int, b: int) -> int:
+    return a * b
+    
+# Register tools with the toolkit
+toolkit.add(add_numbers)
+toolkit.add(multiply_numbers)
+
+# Generate schemas for all tools
+tool_schemas = toolkit.tool_schemas()
+
+# Execute a specific tool by name
+result = toolkit.run_tool("add_numbers", {"a": 5, "b": 3})
+print(result)  # Output: 8
+
+# Access all tool names
+print(toolkit.tool_names)  # Output: ['add_numbers', 'multiply_numbers']
 ```
 
 ### Interacting with OpenAI
