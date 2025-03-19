@@ -66,10 +66,16 @@ def add_numbers(a: int, b: int) -> int:
 @tool_call
 def multiply_numbers(a: int, b: int) -> int:
     return a * b
+
+@tool_call
+def subtract_numbers(a: int, b: int) -> int:
+    return a - b
     
-# Register tools with the toolkit
+# Register a single tool
 toolkit.add(add_numbers)
-toolkit.add(multiply_numbers)
+
+# Or register multiple tools at once
+toolkit.add_tools(multiply_numbers, subtract_numbers)
 
 # Generate schemas for all tools
 tool_schemas = toolkit.tool_schemas()
@@ -79,7 +85,7 @@ result = toolkit.run_tool("add_numbers", {"a": 5, "b": 3})
 print(result)  # Output: 8
 
 # Access all tool names
-print(toolkit.tool_names)  # Output: ['add_numbers', 'multiply_numbers']
+print(toolkit.tool_names)  # Output: ['add_numbers', 'multiply_numbers', 'subtract_numbers']
 ```
 
 ### Interacting with OpenAI
@@ -148,7 +154,7 @@ import os
 
 from jira import JIRA
 from openai import OpenAI
-from vaul import tool_call
+from vaul import tool_call, Toolkit
 
 from dotenv import load_dotenv
 
@@ -166,6 +172,8 @@ openai_session = OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY")
 )
 
+# Create a toolkit to manage all our Jira-related tools
+toolkit = Toolkit()
 
 @tool_call
 def create_issue(summary: str, description: str, issue_type: str) -> dict:
@@ -206,7 +214,6 @@ def get_issue(issue_id: str) -> dict:
     :param issue_id: The issue ID
     :return: The issue
     """
-
     try:
         issue = jira.issue(issue_id)
     except Exception as e:
@@ -302,15 +309,14 @@ def delete_issue(issue_id: str) -> dict:
     }
 
 
-# Define the tools that can be called and map them to the functions
-tools = {
-    'create_issue': create_issue,
-    'get_issue': get_issue,
-    'get_issues': get_issues,
-    'update_issue': update_issue,
-    'delete_issue': delete_issue,
-}
-
+# Register all tools with the toolkit using the bulk add method
+toolkit.add_tools(
+    create_issue, 
+    get_issue, 
+    get_issues, 
+    update_issue, 
+    delete_issue
+)
 
 # Send a message to the OpenAI API to create a new issue
 response = openai_session.chat.completions.create(
@@ -325,23 +331,26 @@ response = openai_session.chat.completions.create(
             "content": "Create a new issue with the summary 'Test Issue' and the description 'This is a test issue' of type 'Task'."
         }
     ],
-    tools=[{
-        "type": "function",
-        "function": value.tool_call_schema
-    } for key, value in tools.items()],
+    tools=toolkit.tool_schemas(),  # Get schemas for all tools in the toolkit
 )
 
 # Identify the tool call, if any
 try:
-    tool_call = response.choices[0].message.tool_calls[0].function.name
-except AttributeError:
-    tool_call = None
-    
+    tool_name = response.choices[0].message.tool_calls[0].function.name
+    tool_arguments = response.choices[0].message.tool_calls[0].function.arguments
+except (AttributeError, IndexError):
+    tool_name = None
     
 # Run the tool if it exists
-if tool_call and tool_call in tools:
-    tool_run = tools[tool_call].from_response(response, throw_error=False)
-    print(tool_run)
+if tool_name:
+    # Get the tool from toolkit and run it
+    try:
+        import json
+        arguments = json.loads(tool_arguments)
+        result = toolkit.run_tool(tool_name, arguments)
+        print(result)
+    except ValueError as e:
+        print(f"Error running tool: {e}")
 ```
 
 
