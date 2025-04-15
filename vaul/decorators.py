@@ -10,6 +10,81 @@ from .utils import remove_keys_recursively
 from .validation import validate_tool_call
 
 
+class StructuredOutput(BaseTool):
+    """
+    StructuredOutput is a base class that standardizes structured outputs from tool calls.
+    It leverages Pydantic's BaseModel for input validation and schema generation.
+
+    Class Methods:
+    - _generate_schema_parameters: Generates parameters for a structured output schema.
+    - tool_call_schema: Generates the full schema of the tool call, including the name and required parameters.
+    - _validate_tool_call: Validates whether the message has a 'tool_call' field and if the name matches the schema.
+    - from_response: Creates an instance from an OpenAI API response.
+    - run: Runs the function with the given arguments.
+
+    Example:
+    ```python
+    class MyFunction(StructuredOutput):
+        arg1: int
+        arg2: str
+    ```
+
+    Attributes:
+    Inherits attributes from Pydantic's BaseModel.
+    """
+
+    @classmethod
+    def _generate_schema_parameters(cls):
+        schema = cls.model_json_schema()
+        parameters = {
+            k: v for k, v in schema.items() if k not in ("title", "description")
+        }
+        parameters["required"] = sorted(
+            k for k, v in parameters["properties"].items() if "default" not in v
+        )
+
+        if "description" not in schema:
+            schema[
+                "description"
+            ] = f"Correctly extracted `{cls.__name__}` with all the required parameters with correct types"
+
+        parameters = remove_keys_recursively(parameters, "additionalProperties")
+        parameters = remove_keys_recursively(parameters, "title")
+
+        return schema, parameters
+
+    @classmethod
+    @property
+    def tool_call_schema(cls):
+        schema, parameters = cls._generate_schema_parameters()
+        return {
+            "name": schema["title"],
+            "description": schema["description"],
+            "parameters": parameters,
+        }
+
+    @classmethod
+    def _validate_tool_call(cls, message, throw_error=True):
+        validate_tool_call(message, cls.tool_call_schema, throw_error)
+
+    @classmethod
+    def from_response(cls, completion, throw_error=True):
+        import json
+
+        message = completion.choices[0].message.model_dump(exclude_unset=True)
+        if throw_error:
+            assert "tool_calls" in message, "No tool call detected"
+            assert (
+                message["tool_calls"][0]["function"]["name"] == cls.__name__
+            ), "Function name does not match"
+
+        return cls(
+            **json.loads(
+                message["tool_calls"][0]["function"]["arguments"], strict=False
+            )
+        )
+
+
 class ToolCall(BaseTool):
     """
     Decorator to convert a function into a tool call for an LLM.
