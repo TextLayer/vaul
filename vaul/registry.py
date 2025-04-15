@@ -298,7 +298,24 @@ class Toolkit:
             ```
         """
         self._tools_df = pd.DataFrame(columns=['name', 'tool'])
+
+    def has_tools(self) -> bool:
+        """
+        Check if the toolkit has any registered tools.
         
+        Returns:
+            bool: True if the toolkit has registered tools, False otherwise
+            
+        Example:
+            ```python
+            toolkit = Toolkit()
+            # ... add some tools ...
+            
+            print(toolkit.has_tools())  # Output: True
+            ```
+        """
+        return not self._tools_df.empty
+
     def __len__(self) -> int:
         """
         Get the number of registered tools.
