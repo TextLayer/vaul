@@ -1,0 +1,17 @@
+[tool.pytest.ini_options]
+addopts = "--cov=vaul --cov-report=term-missing --cov-fail-under=85"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["vaul"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "pass",
+    "raise ImportError",
+] 
