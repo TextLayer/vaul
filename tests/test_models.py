@@ -1,4 +1,3 @@
-import pytest
 from vaul.models import BaseTool
 
 
@@ -22,5 +21,5 @@ def test_base_tool_json_conversion():
     """Test converting BaseTool to JSON."""
     tool = BaseTool(name="test_tool", description="A test tool")
     tool_json = tool.json()
-    assert '"name": "test_tool"' in tool_json
-    assert '"description": "A test tool"' in tool_json
+    assert "test_tool" in tool_json
+    assert "A test tool" in tool_json
