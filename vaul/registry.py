@@ -1,5 +1,8 @@
 from typing import Dict, Any, List, Optional
+
 import pandas as pd
+from tabulate import tabulate
+
 from vaul.decorators import ToolCall
 
 
@@ -332,4 +335,63 @@ class Toolkit:
             ```
         """
         return len(self._tools_df)
+        
+    def to_markdown(self) -> str:
+        """
+        Convert the toolkit's tools to a Markdown table.
+        
+        This method generates a Markdown formatted table of all tools registered in the toolkit,
+        with columns for the tool name, its description, and when to use the tool.
+        
+        The docstring of each tool is parsed to extract:
+        - Line starting with "Desc:" as the description
+        - Line starting with "Usage:" as the usage guidance
+        
+        If "Desc:" is not found, the first line of the docstring is used as the description.
+        
+        Returns:
+            str: A Markdown formatted table of all tools
+            
+        Example:
+            ```python
+            toolkit = Toolkit()
+            # ... add some tools ...
+            
+            markdown_table = toolkit.to_markdown()
+            print(markdown_table)
+            ```
+        """
+        if self._tools_df.empty:
+            return "No tools registered."
+            
+        # Extract tool names and descriptions from the tools
+        data = []
+        for _, row in self._tools_df.iterrows():
+            tool = row['tool']
+            name = row['name']
+            description = "No description available"
+            when_to_use = ""
+            
+            # Parse the docstring to get description and when to use
+            if tool.func.__doc__:
+                doc_lines = tool.func.__doc__.strip().split('\n')
+                
+                # First line is the description (if no Desc: is found)
+                if doc_lines:
+                    description = doc_lines[0].strip()
+                
+                # Look for "Desc:" and "Usage:" in the docstring
+                for line in doc_lines:
+                    line = line.strip()
+                    if line.lower().startswith("desc:"):
+                        description = line[len("desc:"):].strip()
+                    elif line.lower().startswith("usage:"):
+                        when_to_use = line[len("usage:"):].strip()
+            
+            data.append([f"`{name}`", description, when_to_use])
+            
+        # Create the markdown table with tabulate
+        markdown = "### Tools\n"
+        headers = ["Tool", "Description", "When to Use"]
+        return markdown + tabulate(data, headers=headers, tablefmt="pipe")
 
