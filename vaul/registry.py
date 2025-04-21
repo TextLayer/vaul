@@ -438,4 +438,3 @@ class Toolkit:
         formatted_name = f"`{name}`"
         
         return [formatted_name, description, usage]
-

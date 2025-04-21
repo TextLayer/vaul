@@ -1,4 +1,3 @@
-import pytest
 from vaul import Toolkit, tool_call
 
 
