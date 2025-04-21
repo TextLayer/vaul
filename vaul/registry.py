@@ -363,35 +363,79 @@ class Toolkit:
         """
         if self._tools_df.empty:
             return "No tools registered."
-            
-        # Extract tool names and descriptions from the tools
+        
+        # Create table data with tool information
         data = []
         for _, row in self._tools_df.iterrows():
-            tool = row['tool']
-            name = row['name']
-            description = "No description available"
-            when_to_use = ""
-            
-            # Parse the docstring to get description and when to use
-            if tool.func.__doc__:
-                doc_lines = tool.func.__doc__.strip().split('\n')
-                
-                # First line is the description (if no Desc: is found)
-                if doc_lines:
-                    description = doc_lines[0].strip()
-                
-                # Look for "Desc:" and "Usage:" in the docstring
-                for line in doc_lines:
-                    line = line.strip()
-                    if line.lower().startswith("desc:"):
-                        description = line[len("desc:"):].strip()
-                    elif line.lower().startswith("usage:"):
-                        when_to_use = line[len("usage:"):].strip()
-            
-            data.append([f"`{name}`", description, when_to_use])
-            
+            tool_info = self._extract_tool_info(row['tool'], row['name'])
+            data.append(tool_info)
+        
         # Create the markdown table with tabulate
-        markdown = "### Tools\n"
         headers = ["Tool", "Description", "When to Use"]
-        return markdown + tabulate(data, headers=headers, tablefmt="pipe")
+        table = tabulate(data, headers=headers, tablefmt="pipe")
+        
+        return f"### Tools\n{table}"
+    
+    def _extract_tool_info(self, tool: ToolCall, name: str) -> List[str]:
+        """
+        Extract formatted information from a tool for documentation.
+        
+        Args:
+            tool: The ToolCall instance
+            name: The name of the tool
+            
+        Returns:
+            A list with [formatted_name, description, usage_guidance]
+        """
+        description = "No description available"
+        usage = ""
+        
+        if tool.func.__doc__:
+            docstring = tool.func.__doc__.strip()
+            doc_lines = docstring.split('\n')
+            
+            # First line is the default description
+            if doc_lines:
+                description = doc_lines[0].strip()
+            
+            # Process the docstring to handle multiline descriptions and usage
+            current_section = None
+            section_content = []
+            
+            for i, line in enumerate(doc_lines):
+                line = line.strip()
+                
+                # Check for section tags
+                if line.lower().startswith("desc:"):
+                    # If we were in a "usage" section, save its content
+                    if current_section == "usage" and section_content:
+                        usage = ' '.join(section_content)
+                    
+                    # Start a new "desc" section
+                    current_section = "desc"
+                    section_content = [line[len("desc:"):].strip()]
+                    
+                elif line.lower().startswith("usage:"):
+                    # If we were in a "desc" section, save its content
+                    if current_section == "desc" and section_content:
+                        description = ' '.join(section_content)
+                    
+                    # Start a new "usage" section
+                    current_section = "usage"
+                    section_content = [line[len("usage:"):].strip()]
+                    
+                # Continue with current section if not a new tag and not the first line (which is handled separately)
+                elif current_section and i > 0 and line and not line.lower().startswith(("desc:", "usage:")):
+                    section_content.append(line)
+            
+            # Save the content of the last section
+            if current_section == "desc" and section_content:
+                description = ' '.join(section_content)
+            elif current_section == "usage" and section_content:
+                usage = ' '.join(section_content)
+        
+        # Format the name with code formatting
+        formatted_name = f"`{name}`"
+        
+        return [formatted_name, description, usage]
 

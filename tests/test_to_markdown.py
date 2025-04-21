@@ -96,3 +96,34 @@ def test_to_markdown_with_only_first_line_docstring():
     
     assert "`simple_doc`" in markdown
     assert "Just a simple one-line docstring." in markdown 
+
+
+def test_to_markdown_with_multiline_docs():
+    """Test that to_markdown handles multiline descriptions and usage guidance."""
+    toolkit = Toolkit()
+    
+    @tool_call
+    def multiline_doc(query: str) -> dict:
+        """Search function
+        
+        Desc: Performs a comprehensive search 
+        across multiple databases and knowledge sources
+        to find relevant information.
+        
+        Usage: Use this tool when you need to find 
+        specific information about a topic or answer 
+        complex questions that require searching through data.
+        """
+        return {"results": [f"Result for {query}"]}
+    
+    toolkit.add(multiline_doc)
+    markdown = toolkit.to_markdown()
+    
+    # Verify the tool name is present
+    assert "`multiline_doc`" in markdown
+    
+    # Check that the multiline description is combined into a single line
+    assert "Performs a comprehensive search across multiple databases and knowledge sources to find relevant information." in markdown
+    
+    # Check that the multiline usage is combined into a single line  
+    assert "Use this tool when you need to find specific information about a topic or answer complex questions that require searching through data." in markdown 
