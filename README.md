@@ -10,6 +10,8 @@ Vaul is a library designed to help developers create tool calls for AI systems, 
 - [Usage](#usage)
   - [Defining Tool Calls](#defining-tool-calls)
   - [Managing Tool Calls with Toolkit](#managing-tool-calls-with-toolkit)
+  - [Tool Documentation Format](#tool-documentation-format)
+    - [Keeping System Prompts in Sync with Toolkits](#keeping-system-prompts-in-sync-with-toolkits)
   - [Interacting with OpenAI](#interacting-with-openai)
   - [More Complex Examples](#more-complex-examples)
 - [Contributing](#contributing)
@@ -25,6 +27,8 @@ Vaul is designed to simplify the process of creating tool calls that can be used
 - **Automatic Schema Generation**: Generate OpenAPI schemas from function signatures.
 - **Built-in Validation**: Ensure input data integrity using Pydantic validation.
 - **Seamless AI Integration**: Integrate tool calls with AI systems like OpenAI's GPT.
+- **Toolkit Management**: Organize and manage collections of tools with the Toolkit class.
+- **Documentation Generation**: Create beautiful markdown tables of your tools with `to_markdown()` to keep system prompts in sync with your toolkit.
 - **Customizable**: Define custom actions and manage them with ease.
 
 ## Installation
@@ -61,14 +65,29 @@ toolkit = Toolkit()
 
 @tool_call
 def add_numbers(a: int, b: int) -> int:
+    """Add two numbers
+    
+    Desc: Adds two numbers together.
+    Usage: When you need to calculate the sum of two numbers.
+    """
     return a + b
 
 @tool_call
 def multiply_numbers(a: int, b: int) -> int:
+    """Multiply numbers
+    
+    Desc: Multiplies two numbers together.
+    Usage: When you need to calculate the product of two numbers.
+    """
     return a * b
 
 @tool_call
 def subtract_numbers(a: int, b: int) -> int:
+    """Subtract numbers
+    
+    Desc: Subtracts the second number from the first.
+    Usage: When you need to calculate the difference between two numbers.
+    """
     return a - b
     
 # Register a single tool
@@ -86,7 +105,99 @@ print(result)  # Output: 8
 
 # Access all tool names
 print(toolkit.tool_names)  # Output: ['add_numbers', 'multiply_numbers', 'subtract_numbers']
+
+# Generate a markdown table of all tools
+markdown_table = toolkit.to_markdown()
+print(markdown_table)
+# Output:
+# ### Tools
+# | Tool | Description | When to Use |
+# |------|-------------|-------------|
+# | `add_numbers` | Adds two numbers together. | When you need to calculate the sum of two numbers. |
+# | `multiply_numbers` | Multiplies two numbers together. | When you need to calculate the product of two numbers. |
+# | `subtract_numbers` | Subtracts the second number from the first. | When you need to calculate the difference between two numbers. |
 ```
+
+### Tool Documentation Format
+
+When creating tool calls, you can add structured documentation to your function docstrings that will be extracted by the `to_markdown` method. This makes it easy to generate clear documentation tables for users.
+
+The docstring format supports the following special tags:
+
+- `Desc:` - A detailed description of what the tool does
+- `Usage:` - Guidance on when to use this tool
+
+Example of a well-documented tool:
+
+```python
+@tool_call
+def search_database(query: str, limit: int = 10) -> List[Dict]:
+    """Search Database
+    
+    Desc: Performs a semantic search against the knowledge database.
+    Usage: Use this when you need to find information about a specific topic or question.
+    """
+    # Implementation here
+    ...
+```
+
+If no `Desc:` tag is provided, the first line of the docstring will be used as the description.
+
+You can then generate a nicely formatted markdown table of all your tools using:
+
+```python
+markdown_table = toolkit.to_markdown()
+```
+
+This will produce a table like:
+
+```markdown
+### Tools
+| Tool | Description | When to Use |
+|------|-------------|-------------|
+| `search_database` | Performs a semantic search against the knowledge database. | Use this when you need to find information about a specific topic or question. |
+```
+
+#### Keeping System Prompts in Sync with Toolkits
+
+One of the most powerful features of `to_markdown` is its ability to help maintain consistency between your code and AI system prompts. As your toolkit evolves with new tools or updated functionality, you can dynamically generate up-to-date documentation to include in your system prompts.
+
+For example, when working with LLM agents that need to know about available tools:
+
+```python
+# Register all your tools to the toolkit
+toolkit.add_tools(search_database, create_document, update_settings)
+
+# Generate the tools documentation table
+tools_documentation = toolkit.to_markdown()
+
+# Use this in your system prompt
+system_prompt = f"""You are a helpful assistant with access to the following tools:
+
+{tools_documentation}
+
+When a user asks a question, use the most appropriate tool based on the 'When to Use' guidance.
+Always prefer using tools over making up information.
+"""
+
+# Create your chat completion
+response = openai_session.chat.completions.create(
+    model="gpt-4",
+    messages=[
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_question}
+    ],
+    tools=toolkit.tool_schemas()
+)
+```
+
+This approach ensures that:
+1. Your system prompt always contains the latest tools information
+2. The AI has accurate guidance on when to use each tool
+3. The tool descriptions in the prompt match the actual implementation
+4. When you add, remove or modify tools, the system prompt updates automatically
+
+This synchronization is essential for maintaining consistency in agent behavior and preventing the confusion that happens when system prompts describe tools differently than they're actually implemented.
 
 ### Interacting with OpenAI
 
