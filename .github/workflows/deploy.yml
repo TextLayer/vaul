@@ -9,10 +9,11 @@ on:
 
 jobs:
   deploy:
+    name: Release
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write  # needed for commit & release
+      contents: write  # required for committing & creating release
 
     steps:
       - name: Check out code
@@ -47,12 +48,11 @@ jobs:
           git push
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v1
+        uses: marvinpinto/action-automatic-releases@latest
         with:
-          tag_name: v${{ env.PACKAGE_VERSION }}
-          name: v${{ env.PACKAGE_VERSION }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "v${{ env.PACKAGE_VERSION }}"
+          prerelease: false
 
       - name: Build package
         run: python -m build
