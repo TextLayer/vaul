@@ -1,14 +1,18 @@
 name: Deploy to PyPI
 
 on:
-  workflow_dispatch:  # You can also add 'release: published' if needed
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g., 1.2.3)"
+        required: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write  # for committing changes & creating releases
+      contents: write  # needed for commit & release
 
     steps:
       - name: Check out code
@@ -23,54 +27,23 @@ jobs:
         run: |
           apt-get update && apt-get install -y jq
           python -m pip install --upgrade pip
-          pip install build twine requests
+          pip install build twine
 
-      - name: Get current version from setup.py
-        id: get_version
+      - name: Use input version
         run: |
-          version=$(python setup.py --version)
-          echo "PACKAGE_VERSION=$version" >> $GITHUB_ENV
-          echo "Detected version: $version"
+          echo "PACKAGE_VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          echo "Using version: $PACKAGE_VERSION"
 
-      - name: Get version from PyPI
-        id: get_pypi_version
+      - name: Update version in setup.py
         run: |
-          pkg=$(python setup.py --name)
-          response=$(curl -s https://pypi.org/pypi/$pkg/json || echo "")
-          if [ -z "$response" ]; then
-            echo "PYPI_VERSION=none" >> $GITHUB_ENV
-          else
-            pypi_version=$(curl -s https://pypi.org/pypi/vaul/json | jq -r '.info.version')
-            echo "PYPI_VERSION=$pypi_version" >> $GITHUB_ENV
-          fi
-
-      - name: Compare versions and patch if needed
-        id: version_check
-        run: |
-          if [ "$PYPI_VERSION" = "none" ]; then
-            echo "New package. No version conflict."
-            exit 0
-          fi
-
-          if [ "$PACKAGE_VERSION" = "$PYPI_VERSION" ]; then
-            echo "Versions are the same. Bumping patch version..."
-            IFS='.' read -r major minor patch <<< "$PACKAGE_VERSION"
-            new_patch=$((patch + 1))
-            new_version="$major.$minor.$new_patch"
-            sed -i "s/version=['\"]$PACKAGE_VERSION['\"]/version='$new_version'/" setup.py
-            echo "Bumped version to $new_version"
-            echo "PACKAGE_VERSION=$new_version" >> $GITHUB_ENV
-          else
-            dpkg --compare-versions "$PACKAGE_VERSION" gt "$PYPI_VERSION" && exit 0
-            echo "❌ Version in setup.py ($PACKAGE_VERSION) is not newer than PyPI ($PYPI_VERSION)"
-            exit 1
-          fi
+          sed -i "s/version=['\"]\([0-9.]\+\)['\"]/version='${PACKAGE_VERSION}'/" setup.py
+          echo "Updated setup.py to version $PACKAGE_VERSION"
 
       - name: Commit and push version bump
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git commit -am "Bump version to $PACKAGE_VERSION"
+          git commit -am "Release version $PACKAGE_VERSION"
           git push
 
       - name: Create GitHub release
