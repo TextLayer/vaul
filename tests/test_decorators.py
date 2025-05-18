@@ -201,8 +201,8 @@ def error_function(x: int) -> int:
 def test_tool_call_exception_handling():
     """Test exception handling in tool_call decorator."""
     result = error_function(42)
-    assert isinstance(result, ValueError)
-    assert str(result) == "Test error"
+    assert isinstance(result, str)
+    assert result == "Test error"
 
     with pytest.raises(ValueError, match="Test error"):
         error_function(42, raise_for_exception=True)
@@ -211,8 +211,8 @@ def test_tool_call_exception_handling():
 def test_tool_call_run_exception_handling():
     """Test exception handling in tool_call run method."""
     result = error_function.run({"x": 42})
-    assert isinstance(result, ValueError)
-    assert str(result) == "Test error"
+    assert isinstance(result, str)
+    assert result == "Test error"
 
     with pytest.raises(ValueError, match="Test error"):
         error_function.run({"x": 42}, raise_for_exception=True)
