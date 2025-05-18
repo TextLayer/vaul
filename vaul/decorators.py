@@ -127,11 +127,12 @@ class ToolCall(BaseTool):
         https://pypi.org/project/instructor/
     """
 
-    def __init__(self, func: Callable) -> None:
+    def __init__(self, func: Callable, raise_for_exception: bool = False) -> None:
         super().__init__()
         self.func = func
         self.validate_func = validate_arguments(func)
         self.tool_call_schema = self._generate_tool_call_schema()
+        self.raise_for_exception = raise_for_exception
 
     def _generate_tool_call_schema(self) -> Dict[str, Any]:
         schema = self.validate_func.model.model_json_schema()
@@ -162,17 +163,15 @@ class ToolCall(BaseTool):
             "parameters": schema,
         }
 
-    def __call__(self, *args, raise_for_exception: bool = False, **kwargs) -> Any:
+    def __call__(self, *args, **kwargs) -> Any:
         @wraps(self.func)
         def wrapper(*args, **kwargs):
             try:
                 return self.validate_func(*args, **kwargs)
             except Exception as e:
-                if raise_for_exception:
+                if self.raise_for_exception:
                     raise
                 return str(e)
-
-        kwargs.pop("raise_for_exception", None)
         return wrapper(*args, **kwargs)
 
     def _validate_tool_call(
@@ -196,23 +195,21 @@ class ToolCall(BaseTool):
             )
         )
 
-    def run(self, arguments: Dict[str, Any], raise_for_exception: bool = False) -> Any:
+    def run(self, arguments: Dict[str, Any]) -> Any:
         try:
             return self.func(**arguments)
         except Exception as e:
-            if raise_for_exception:
+            if self.raise_for_exception:
                 raise
             return str(e)
 
 
-def tool_call(func: Callable) -> ToolCall:
+def tool_call(func: Callable = None, *, raise_for_exception: bool = False) -> ToolCall:
     """
-    Function to apply the ToolCall decorator to a function.
-
-    Args:
-        func (Callable): The function to be decorated.
-
-    Returns:
-        ToolCall: An instance of the ToolCall class.
+    Function to apply the ToolCall decorator to a function, with optional raise_for_exception flag.
     """
-    return ToolCall(func)
+    if func is not None and callable(func):
+        return ToolCall(func, raise_for_exception=raise_for_exception)
+    def wrapper(f):
+        return ToolCall(f, raise_for_exception=raise_for_exception)
+    return wrapper
