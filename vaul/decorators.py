@@ -170,7 +170,7 @@ class ToolCall(BaseTool):
             except Exception as e:
                 if raise_for_exception:
                     raise
-                return e
+                return str(e)
 
         kwargs.pop("raise_for_exception", None)
         return wrapper(*args, **kwargs)
