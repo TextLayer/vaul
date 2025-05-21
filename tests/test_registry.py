@@ -118,5 +118,6 @@ def test_run_tool_with_invalid_arguments():
     """Test running a tool with invalid arguments."""
     toolkit = Toolkit()
     toolkit.add(add_numbers)
-    with pytest.raises(Exception):  # Pydantic will raise validation error
-        toolkit.run_tool("add_numbers", {"a": "not_an_int", "b": 3})
+    result = toolkit.run_tool("add_numbers", {"a": "not_an_int", "b": 3})
+    assert isinstance(result, str)
+    assert "can only concatenate str" in result.lower()

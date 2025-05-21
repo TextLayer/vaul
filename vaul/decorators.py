@@ -44,9 +44,9 @@ class StructuredOutput(BaseTool):
         )
 
         if "description" not in schema:
-            schema[
-                "description"
-            ] = f"Correctly extracted `{cls.__name__}` with all the required parameters with correct types"
+            schema["description"] = (
+                f"Correctly extracted `{cls.__name__}` with all the required parameters with correct types"
+            )
 
         parameters = remove_keys_recursively(parameters, "additionalProperties")
         parameters = remove_keys_recursively(parameters, "title")
@@ -87,40 +87,52 @@ class StructuredOutput(BaseTool):
 
 class ToolCall(BaseTool):
     """
-    Decorator to convert a function into a tool call for an LLM.
-    The function will be validated using pydantic and the schema will be
-    generated from the function signature.
+        Decorator to convert a function into a tool call for an LLM.
+        The function will be validated using pydantic and the schema will be
+        generated from the function signature.
 
-    Example:
-        ```python
-        @ToolCall
-        def sum(a: int, b: int) -> int:
-            return a + b
-        ```
+        Exception Handling:
+        - By default, any exceptions are caught and returned as the raw exception object
+        - When raise_for_exception=True, exceptions are propagated as normal
+        - This behavior applies to both direct function calls and the run() method
 
-    Methods:
-    - __init__: Initializes the decorator with the function to wrap.
-    - _generate_tool_call_schema: Generates the schema based on the function signature.
-    - __call__: Makes the class instance callable, effectively wrapping the decorated function.
-    - _validate_tool_call: Validates a message against the tool call schema.
-    - from_response: Creates an instance from an OpenAI API response.
-    - run: Runs the function with the given arguments.
+        Example:
+            ```python
+            @ToolCall
+            def sum(a: int, b: int) -> int:
+                return a + b
 
-    Attributes:
-    - func: The function that is being decorated.
-    - validate_func: A function that wraps the original function, adding Pydantic validation.
-    - tool_call_schema: The generated schema for the tool call.
+            # Returns raw exception object
+            result = sum(1, "invalid")  # Returns TypeError object
 
-    **INSPIRED BY JASON LIU'S EXCELLENT OPENAI_FUNCTION_CALL, NOW INSTRUCTOR, PACKAGE**
+            # Propagates exception
+            result = sum(1, "invalid", raise_for_exception=True)  # Raises TypeError
+    ```
 
-    https://pypi.org/project/instructor/
+        Methods:
+        - __init__: Initializes the decorator with the function to wrap.
+        - _generate_tool_call_schema: Generates the schema based on the function signature.
+        - __call__: Makes the class instance callable, effectively wrapping the decorated function.
+        - _validate_tool_call: Validates a message against the tool call schema.
+        - from_response: Creates an instance from an OpenAI API response.
+        - run: Runs the function with the given arguments.
+
+        Attributes:
+        - func: The function that is being decorated.
+        - validate_func: A function that wraps the original function, adding Pydantic validation.
+        - tool_call_schema: The generated schema for the tool call.
+
+        **INSPIRED BY JASON LIU'S EXCELLENT OPENAI_FUNCTION_CALL, NOW INSTRUCTOR, PACKAGE**
+
+        https://pypi.org/project/instructor/
     """
 
-    def __init__(self, func: Callable) -> None:
+    def __init__(self, func: Callable, raise_for_exception: bool = False) -> None:
         super().__init__()
         self.func = func
         self.validate_func = validate_arguments(func)
         self.tool_call_schema = self._generate_tool_call_schema()
+        self.raise_for_exception = raise_for_exception
 
     def _generate_tool_call_schema(self) -> Dict[str, Any]:
         schema = self.validate_func.model.model_json_schema()
@@ -132,9 +144,15 @@ class ToolCall(BaseTool):
         schema["properties"] = relevant_properties
 
         # Update the required field to allow empty arguments
-        schema["required"] = sorted(
-            k for k, v in relevant_properties.items() if v.get("default", None) is None
-        ) if relevant_properties else []
+        schema["required"] = (
+            sorted(
+                k
+                for k, v in relevant_properties.items()
+                if v.get("default", None) is None
+            )
+            if relevant_properties
+            else []
+        )
 
         schema = remove_keys_recursively(schema, "additionalProperties")
         schema = remove_keys_recursively(schema, "title")
@@ -148,8 +166,12 @@ class ToolCall(BaseTool):
     def __call__(self, *args, **kwargs) -> Any:
         @wraps(self.func)
         def wrapper(*args, **kwargs):
-            return self.validate_func(*args, **kwargs)
-
+            try:
+                return self.validate_func(*args, **kwargs)
+            except Exception as e:
+                if self.raise_for_exception:
+                    raise
+                return str(e)
         return wrapper(*args, **kwargs)
 
     def _validate_tool_call(
@@ -174,17 +196,20 @@ class ToolCall(BaseTool):
         )
 
     def run(self, arguments: Dict[str, Any]) -> Any:
-        return self.func(**arguments)
+        try:
+            return self.func(**arguments)
+        except Exception as e:
+            if self.raise_for_exception:
+                raise
+            return str(e)
 
 
-def tool_call(func: Callable) -> ToolCall:
+def tool_call(func: Callable = None, *, raise_for_exception: bool = False) -> ToolCall:
     """
-    Function to apply the ToolCall decorator to a function.
-
-    Args:
-        func (Callable): The function to be decorated.
-
-    Returns:
-        ToolCall: An instance of the ToolCall class.
+    Function to apply the ToolCall decorator to a function, with optional raise_for_exception flag.
     """
-    return ToolCall(func)
+    if func is not None and callable(func):
+        return ToolCall(func, raise_for_exception=raise_for_exception)
+    def wrapper(f):
+        return ToolCall(f, raise_for_exception=raise_for_exception)
+    return wrapper

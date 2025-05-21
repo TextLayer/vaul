@@ -190,3 +190,37 @@ def test_tool_call_run():
     """Test the run method of tool call."""
     result = sample_function.run({"x": 42, "y": "test"})
     assert result == {"result": 42, "text": "test", "optional": 1.0}
+
+
+@tool_call(raise_for_exception=True)
+def error_function_raise(x: int) -> int:
+    """Function that raises an error and propagates it."""
+    raise ValueError("Test error")
+
+
+@tool_call
+def error_function(x: int) -> int:
+    """Function that raises an error and returns the error message."""
+    raise ValueError("Test error")
+
+
+def test_tool_call_exception_handling():
+    """Test exception handling in tool_call decorator (default: no raise)."""
+    result = error_function(42)
+    assert isinstance(result, str)
+    assert result == "Test error"
+
+    # error_function_raise should raise
+    with pytest.raises(ValueError, match="Test error"):
+        error_function_raise(42)
+
+
+def test_tool_call_run_exception_handling():
+    """Test exception handling in tool_call run method (default: no raise)."""
+    result = error_function.run({"x": 42})
+    assert isinstance(result, str)
+    assert result == "Test error"
+
+    # error_function_raise should raise
+    with pytest.raises(ValueError, match="Test error"):
+        error_function_raise.run({"x": 42})
