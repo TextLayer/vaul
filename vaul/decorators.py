@@ -4,7 +4,7 @@ import inspect
 from functools import wraps
 from typing import Any, Callable, Dict
 
-from pydantic import TypeAdapter, validate_call
+from pydantic import TypeAdapter, ValidationError, validate_call
 
 from .models import BaseTool
 from .utils import remove_keys_recursively
@@ -153,7 +153,7 @@ class ToolCall(BaseTool):
                     param_adapter = TypeAdapter(param.annotation)
                     param_schema = param_adapter.json_schema()
                     properties[name] = param_schema
-                except (TypeError, ValueError, pydantic.ValidationError):
+                except (TypeError, ValueError, ValidationError):
                     properties[name] = {"type": "object"}
             else:
                 properties[name] = {"type": "object"}
