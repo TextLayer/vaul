@@ -153,7 +153,7 @@ class ToolCall(BaseTool):
                     param_adapter = TypeAdapter(param.annotation)
                     param_schema = param_adapter.json_schema()
                     properties[name] = param_schema
-                except Exception:
+                except (TypeError, ValueError, pydantic.ValidationError):
                     properties[name] = {"type": "object"}
             else:
                 properties[name] = {"type": "object"}
