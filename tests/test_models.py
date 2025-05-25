@@ -12,7 +12,7 @@ def test_base_tool_creation():
 def test_base_tool_dict_conversion():
     """Test converting BaseTool to dictionary."""
     tool = BaseTool(name="test_tool", description="A test tool")
-    tool_dict = tool.dict()
+    tool_dict = tool.model_dump()
     assert tool_dict["name"] == "test_tool"
     assert tool_dict["description"] == "A test tool"
 
@@ -20,6 +20,6 @@ def test_base_tool_dict_conversion():
 def test_base_tool_json_conversion():
     """Test converting BaseTool to JSON."""
     tool = BaseTool(name="test_tool", description="A test tool")
-    tool_json = tool.json()
+    tool_json = tool.model_dump_json()
     assert "test_tool" in tool_json
     assert "A test tool" in tool_json

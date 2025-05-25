@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import inspect
 from functools import wraps
 from typing import Any, Callable, Dict
 
-from pydantic import validate_arguments
+from pydantic import TypeAdapter, ValidationError, validate_call
 
 from .models import BaseTool
 from .utils import remove_keys_recursively
@@ -130,30 +131,40 @@ class ToolCall(BaseTool):
     def __init__(self, func: Callable, raise_for_exception: bool = False) -> None:
         super().__init__()
         self.func = func
-        self.validate_func = validate_arguments(func)
+        self.validate_func = validate_call(func)
         self.tool_call_schema = self._generate_tool_call_schema()
         self.raise_for_exception = raise_for_exception
 
     def _generate_tool_call_schema(self) -> Dict[str, Any]:
-        schema = self.validate_func.model.model_json_schema()
-        relevant_properties = {
-            k: v
-            for k, v in schema["properties"].items()
-            if k not in ("v__duplicate_kwargs", "args", "kwargs")
-        }
-        schema["properties"] = relevant_properties
-
-        # Update the required field to allow empty arguments
-        schema["required"] = (
-            sorted(
-                k
-                for k, v in relevant_properties.items()
-                if v.get("default", None) is None
-            )
-            if relevant_properties
-            else []
-        )
-
+        sig = inspect.signature(self.func)
+        
+        # Analyze function parameters
+        
+        schema = {}
+        properties = {}
+        required = []
+        
+        for name, param in sig.parameters.items():
+            if name in ("args", "kwargs"):
+                continue
+                
+            if param.annotation is not inspect.Parameter.empty:
+                try:
+                    param_adapter = TypeAdapter(param.annotation)
+                    param_schema = param_adapter.json_schema()
+                    properties[name] = param_schema
+                except (TypeError, ValueError, ValidationError):
+                    properties[name] = {"type": "object"}
+            else:
+                properties[name] = {"type": "object"}
+                
+            if param.default is inspect.Parameter.empty:
+                required.append(name)
+        
+        schema["properties"] = properties
+        schema["required"] = sorted(required) if required else []
+        schema["type"] = "object"
+        
         schema = remove_keys_recursively(schema, "additionalProperties")
         schema = remove_keys_recursively(schema, "title")
 

@@ -11,7 +11,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     install_requires=[
-        'pydantic==2.6.4',
+        'pydantic>=2.6.4',
         'pandas>=2.0.0',
         'tabulate>=0.9.0',
     ],
