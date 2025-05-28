@@ -1,5 +1,7 @@
 # Vaul
 
+![Black Background](black-bg.png)
+
 Vaul is a library designed to help developers create tool calls for AI systems, such as OpenAI's GPT models. It provides a simple and efficient way to define and manage these tool calls with built-in validation and schema generation.
 
 ## Table of Contents
@@ -66,7 +68,7 @@ toolkit = Toolkit()
 @tool_call
 def add_numbers(a: int, b: int) -> int:
     """Add two numbers
-    
+
     Desc: Adds two numbers together.
     Usage: When you need to calculate the sum of two numbers.
     """
@@ -75,7 +77,7 @@ def add_numbers(a: int, b: int) -> int:
 @tool_call
 def multiply_numbers(a: int, b: int) -> int:
     """Multiply numbers
-    
+
     Desc: Multiplies two numbers together.
     Usage: When you need to calculate the product of two numbers.
     """
@@ -84,12 +86,12 @@ def multiply_numbers(a: int, b: int) -> int:
 @tool_call
 def subtract_numbers(a: int, b: int) -> int:
     """Subtract numbers
-    
+
     Desc: Subtracts the second number from the first.
     Usage: When you need to calculate the difference between two numbers.
     """
     return a - b
-    
+
 # Register a single tool
 toolkit.add(add_numbers)
 
@@ -133,7 +135,7 @@ Example of a well-documented tool:
 @tool_call
 def search_database(query: str, limit: int = 10) -> List[Dict]:
     """Search Database
-    
+
     Desc: Performs a semantic search against the knowledge database.
     Usage: Use this when you need to find information about a specific topic or question.
     """
@@ -153,8 +155,9 @@ This will produce a table like:
 
 ```markdown
 ### Tools
-| Tool | Description | When to Use |
-|------|-------------|-------------|
+
+| Tool              | Description                                                | When to Use                                                                    |
+| ----------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `search_database` | Performs a semantic search against the knowledge database. | Use this when you need to find information about a specific topic or question. |
 ```
 
@@ -192,6 +195,7 @@ response = openai_session.chat.completions.create(
 ```
 
 This approach ensures that:
+
 1. Your system prompt always contains the latest tools information
 2. The AI has accurate guidance on when to use each tool
 3. The tool descriptions in the prompt match the actual implementation
@@ -258,6 +262,7 @@ print(add_numbers.from_response(response))
 ```
 
 ### More Complex Examples
+
 Let's take a look at how you might handle a more complex application, such as one that integrates multiple potential tool calls:
 
 ```python
@@ -422,10 +427,10 @@ def delete_issue(issue_id: str) -> dict:
 
 # Register all tools with the toolkit using the bulk add method
 toolkit.add_tools(
-    create_issue, 
-    get_issue, 
-    get_issues, 
-    update_issue, 
+    create_issue,
+    get_issue,
+    get_issues,
+    update_issue,
     delete_issue
 )
 
@@ -451,7 +456,7 @@ try:
     tool_arguments = response.choices[0].message.tool_calls[0].function.arguments
 except (AttributeError, IndexError):
     tool_name = None
-    
+
 # Run the tool if it exists
 if tool_name:
     # Get the tool from toolkit and run it
@@ -464,8 +469,8 @@ if tool_name:
         print(f"Error running tool: {e}")
 ```
 
-
 ## Roadmap
+
 - [ ] Add support for other providers (e.g. Anthropic, Cohere, etc.)
 - [ ] Add examples for parallel tool calls
 - [ ] Better error handling and logging
