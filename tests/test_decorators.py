@@ -3,6 +3,7 @@ from typing import Optional
 import pytest
 from pydantic import BaseModel
 from vaul.decorators import StructuredOutput, tool_call
+from tests.utils.assertion import is_equal, is_true, contains
 
 
 class TestOutput(StructuredOutput):
@@ -16,13 +17,13 @@ class TestOutput(StructuredOutput):
 def test_structured_output_schema():
     """Test schema generation for StructuredOutput."""
     schema = TestOutput.tool_call_schema
-    assert schema["name"] == "TestOutput"
-    assert "description" in schema
-    assert "parameters" in schema
-    assert "value" in schema["parameters"]["properties"]
-    assert "text" in schema["parameters"]["properties"]
-    assert "optional" in schema["parameters"]["properties"]
-    assert sorted(schema["parameters"]["required"]) == ["text", "value"]
+    is_equal(schema["name"], "TestOutput")
+    contains(schema, "description")
+    contains(schema, "parameters")
+    contains(schema["parameters"]["properties"], "value")
+    contains(schema["parameters"]["properties"], "text")
+    contains(schema["parameters"]["properties"], "optional")
+    is_equal(sorted(schema["parameters"]["required"]), ["text", "value"])
 
 
 def test_structured_output_validation():
@@ -50,9 +51,9 @@ def test_structured_output_validation():
         choices = [Choice()]
 
     output = TestOutput.from_response(MockCompletion())
-    assert output.value == 42
-    assert output.text == "test"
-    assert output.optional is None
+    is_equal(output.value, 42)
+    is_equal(output.text, "test")
+    is_equal(output.optional, None)
 
 
 def test_structured_output_validation_error():
@@ -92,7 +93,8 @@ def test_structured_output_wrong_function_name():
 def test_structured_output_no_throw():
     """Test validation without throwing errors."""
     message = {"no_tool_calls": {}}
-    assert not TestOutput._validate_tool_call(message, throw_error=False)
+    result = TestOutput._validate_tool_call(message, throw_error=False)
+    is_equal(result, False)
 
 
 @tool_call
@@ -104,19 +106,19 @@ def sample_function(x: int, y: str, z: Optional[float] = 1.0) -> dict:
 def test_tool_call_decorator():
     """Test the tool_call decorator functionality."""
     result = sample_function(42, "test")
-    assert result == {"result": 42, "text": "test", "optional": 1.0}
+    is_equal(result, {"result": 42, "text": "test", "optional": 1.0})
 
 
 def test_tool_call_schema():
     """Test schema generation for tool_call decorator."""
     schema = sample_function.tool_call_schema
-    assert schema["name"] == "sample_function"
-    assert schema["description"] == "Sample function for testing."
-    assert "parameters" in schema
-    assert "x" in schema["parameters"]["properties"]
-    assert "y" in schema["parameters"]["properties"]
-    assert "z" in schema["parameters"]["properties"]
-    assert sorted(schema["parameters"].get("required", [])) == ["x", "y"]
+    is_equal(schema["name"], "sample_function")
+    is_equal(schema["description"], "Sample function for testing.")
+    contains(schema, "parameters")
+    contains(schema["parameters"]["properties"], "x")
+    contains(schema["parameters"]["properties"], "y")
+    contains(schema["parameters"]["properties"], "z")
+    is_equal(sorted(schema["parameters"].get("required", [])), ["x", "y"])
 
 
 def test_tool_call_validation():
@@ -143,7 +145,7 @@ def test_tool_call_validation():
         choices = [Choice()]
 
     result = sample_function.from_response(MockCompletion())
-    assert result == {"result": 42, "text": "test", "optional": 1.0}
+    is_equal(result, {"result": 42, "text": "test", "optional": 1.0})
 
 
 def test_tool_call_validation_error():
@@ -183,13 +185,14 @@ def test_tool_call_wrong_function_name():
 def test_tool_call_no_throw():
     """Test validation without throwing errors."""
     message = {"no_tool_calls": {}}
-    assert not sample_function._validate_tool_call(message, throw_error=False)
+    result = sample_function._validate_tool_call(message, throw_error=False)
+    is_equal(result, False)
 
 
 def test_tool_call_run():
     """Test the run method of tool call."""
     result = sample_function.run({"x": 42, "y": "test"})
-    assert result == {"result": 42, "text": "test", "optional": 1.0}
+    is_equal(result, {"result": 42, "text": "test", "optional": 1.0})
 
 
 @tool_call(raise_for_exception=True)
@@ -207,8 +210,8 @@ def error_function(x: int) -> int:
 def test_tool_call_exception_handling():
     """Test exception handling in tool_call decorator (default: no raise)."""
     result = error_function(42)
-    assert isinstance(result, str)
-    assert result == "Test error"
+    is_true(isinstance(result, str))
+    is_equal(result, "Test error")
 
     # error_function_raise should raise
     with pytest.raises(ValueError, match="Test error"):
@@ -218,8 +221,8 @@ def test_tool_call_exception_handling():
 def test_tool_call_run_exception_handling():
     """Test exception handling in tool_call run method (default: no raise)."""
     result = error_function.run({"x": 42})
-    assert isinstance(result, str)
-    assert result == "Test error"
+    is_true(isinstance(result, str))
+    is_equal(result, "Test error")
 
     # error_function_raise should raise
     with pytest.raises(ValueError, match="Test error"):

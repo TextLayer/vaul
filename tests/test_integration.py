@@ -2,6 +2,8 @@ import json
 from unittest.mock import Mock
 from vaul import Toolkit, tool_call, StructuredOutput
 from typing import List, Dict, Optional
+from tests import BaseTest
+from tests.utils.assertion import contains
 
 
 class WeatherInfo(StructuredOutput):
@@ -53,7 +55,7 @@ def send_notification(message: str, recipient: str, priority: str = "normal") ->
     }
 
 
-class TestOpenAIIntegration:
+class TestOpenAIIntegration(BaseTest):
     """Integration tests with mock OpenAI responses."""
 
     def create_mock_completion(self, tool_name: str, arguments: dict):
@@ -257,7 +259,7 @@ class TestOpenAIIntegration:
         assert "positive" in invalid_result.lower()
 
 
-class TestEndToEndWorkflows:
+class TestEndToEndWorkflows(BaseTest):
     """End-to-end workflow tests."""
 
     def test_complete_assistant_workflow(self):
@@ -287,7 +289,7 @@ class TestEndToEndWorkflows:
             result = toolkit.run_tool(step["tool"], step["args"])
 
             for key in step["expected_keys"]:
-                assert key in result, f"Missing key {key} in {step['tool']} result"
+                contains(result, key)
 
             results.append(result)
 

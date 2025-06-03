@@ -1,5 +1,6 @@
 import pytest
 from vaul import Toolkit, tool_call
+from tests.utils.assertion import is_equal, is_true, is_not_none, contains
 
 
 @tool_call
@@ -17,39 +18,39 @@ def multiply_numbers(a: int, b: int) -> int:
 def test_toolkit_initialization():
     """Test toolkit initialization."""
     toolkit = Toolkit()
-    assert len(toolkit) == 0
-    assert not toolkit.has_tools()
-    assert toolkit.tools == {}
-    assert toolkit.tool_names == []
+    is_equal(len(toolkit), 0)
+    is_equal(toolkit.has_tools(), False)
+    is_equal(toolkit.tools, {})
+    is_equal(toolkit.tool_names, [])
 
 
 def test_add_tool():
     """Test adding a single tool."""
     toolkit = Toolkit()
     toolkit.add(add_numbers)
-    assert len(toolkit) == 1
-    assert toolkit.has_tools()
-    assert "add_numbers" in toolkit.tool_names
-    assert "add_numbers" in toolkit.tools
+    is_equal(len(toolkit), 1)
+    is_true(toolkit.has_tools())
+    contains(toolkit.tool_names, "add_numbers")
+    contains(toolkit.tools, "add_numbers")
 
 
 def test_add_tools():
     """Test adding multiple tools."""
     toolkit = Toolkit()
     toolkit.add_tools(add_numbers, multiply_numbers)
-    assert len(toolkit) == 2
-    assert set(toolkit.tool_names) == {"add_numbers", "multiply_numbers"}
+    is_equal(len(toolkit), 2)
+    is_equal(set(toolkit.tool_names), {"add_numbers", "multiply_numbers"})
 
 
 def test_remove_tool():
     """Test removing a tool."""
     toolkit = Toolkit()
     toolkit.add(add_numbers)
-    assert toolkit.remove("add_numbers")
-    assert len(toolkit) == 0
-    assert not toolkit.has_tools()
+    is_true(toolkit.remove("add_numbers"))
+    is_equal(len(toolkit), 0)
+    is_equal(toolkit.has_tools(), False)
     # Test removing non-existent tool
-    assert not toolkit.remove("non_existent")
+    is_equal(toolkit.remove("non_existent"), False)
 
 
 def test_get_tool():
@@ -57,9 +58,9 @@ def test_get_tool():
     toolkit = Toolkit()
     toolkit.add(add_numbers)
     tool = toolkit.get_tool("add_numbers")
-    assert tool is not None
-    assert tool.func.__name__ == "add_numbers"
-    assert toolkit.get_tool("non_existent") is None
+    is_not_none(tool)
+    is_equal(tool.func.__name__, "add_numbers")
+    is_equal(toolkit.get_tool("non_existent"), None)
 
 
 def test_run_tool():
@@ -67,7 +68,7 @@ def test_run_tool():
     toolkit = Toolkit()
     toolkit.add(add_numbers)
     result = toolkit.run_tool("add_numbers", {"a": 5, "b": 3})
-    assert result == 8
+    is_equal(result, 8)
     with pytest.raises(ValueError):
         toolkit.run_tool("non_existent", {})
 
@@ -77,26 +78,26 @@ def test_tool_schemas():
     toolkit = Toolkit()
     toolkit.add_tools(add_numbers, multiply_numbers)
     schemas = toolkit.tool_schemas()
-    assert len(schemas) == 2
+    is_equal(len(schemas), 2)
     for schema in schemas:
-        assert schema["type"] == "function"
-        assert "function" in schema
+        is_equal(schema["type"], "function")
+        contains(schema, "function")
         tool_schema = schema["function"]
-        assert tool_schema["name"] in {"add_numbers", "multiply_numbers"}
-        assert "parameters" in tool_schema
-        assert "properties" in tool_schema["parameters"]
-        assert "a" in tool_schema["parameters"]["properties"]
-        assert "b" in tool_schema["parameters"]["properties"]
+        contains({"add_numbers", "multiply_numbers"}, tool_schema["name"])
+        contains(tool_schema, "parameters")
+        contains(tool_schema["parameters"], "properties")
+        contains(tool_schema["parameters"]["properties"], "a")
+        contains(tool_schema["parameters"]["properties"], "b")
 
 
 def test_clear():
     """Test clearing all tools."""
     toolkit = Toolkit()
     toolkit.add_tools(add_numbers, multiply_numbers)
-    assert len(toolkit) == 2
+    is_equal(len(toolkit), 2)
     toolkit.clear()
-    assert len(toolkit) == 0
-    assert not toolkit.has_tools()
+    is_equal(len(toolkit), 0)
+    is_equal(toolkit.has_tools(), False)
 
 
 def test_duplicate_tool():
@@ -119,5 +120,5 @@ def test_run_tool_with_invalid_arguments():
     toolkit = Toolkit()
     toolkit.add(add_numbers)
     result = toolkit.run_tool("add_numbers", {"a": "not_an_int", "b": 3})
-    assert isinstance(result, str)
-    assert "can only concatenate str" in result.lower()
+    is_true(isinstance(result, str))
+    contains(result.lower(), "can only concatenate str")

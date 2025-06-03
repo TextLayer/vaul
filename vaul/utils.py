@@ -28,6 +28,8 @@ def remove_keys_recursively(
     new_dict = {}
     for k, v in d.items():
         if k not in keys_to_remove:
-            new_dict[k] = remove_keys_recursively(v, keys_to_remove) if isinstance(v, dict) else v
+            new_dict[k] = (
+                remove_keys_recursively(v, keys_to_remove) if isinstance(v, dict) else v
+            )
 
     return new_dict

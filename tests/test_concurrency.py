@@ -2,6 +2,7 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from vaul import Toolkit, tool_call
+from tests import BaseTest
 
 
 @tool_call
@@ -38,7 +39,7 @@ def stateful_counter(increment: int = 1) -> int:
     return stateful_counter._counter
 
 
-class TestConcurrencyAndThreadSafety:
+class TestConcurrencyAndThreadSafety(BaseTest):
     """Concurrency and thread safety tests."""
 
     def test_concurrent_tool_execution(self):

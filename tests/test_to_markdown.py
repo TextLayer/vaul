@@ -1,4 +1,5 @@
 from vaul import Toolkit, tool_call
+from tests.utils.assertion import is_equal, contains
 
 
 @tool_call
@@ -34,7 +35,7 @@ def test_to_markdown_empty_toolkit():
     """Test that to_markdown returns a message for an empty toolkit."""
     toolkit = Toolkit()
     markdown = toolkit.to_markdown()
-    assert markdown == "No tools registered."
+    is_equal(markdown, "No tools registered.")
 
 
 def test_to_markdown_with_tools():
@@ -45,21 +46,21 @@ def test_to_markdown_with_tools():
     markdown = toolkit.to_markdown()
 
     # Verify the table contains the expected tool names and descriptions
-    assert "`add_numbers`" in markdown
-    assert "`subtract_numbers`" in markdown
-    assert "`multiply_numbers`" in markdown
-    assert "Adds two numbers together." in markdown
-    assert "Subtracts the second number from the first." in markdown
-    assert "Multiplies two numbers together." in markdown
+    contains(markdown, "`add_numbers`")
+    contains(markdown, "`subtract_numbers`")
+    contains(markdown, "`multiply_numbers`")
+    contains(markdown, "Adds two numbers together.")
+    contains(markdown, "Subtracts the second number from the first.")
+    contains(markdown, "Multiplies two numbers together.")
     # Verify it has the usage information
-    assert "When you need to calculate the sum of two numbers." in markdown
-    assert "When you need to calculate the difference between two numbers." in markdown
+    contains(markdown, "When you need to calculate the sum of two numbers.")
+    contains(markdown, "When you need to calculate the difference between two numbers.")
     # Verify it's in markdown table format with the expected headers
-    assert "### Tools" in markdown
-    assert "Tool" in markdown
-    assert "Description" in markdown
-    assert "When to Use" in markdown
-    assert "|" in markdown
+    contains(markdown, "### Tools")
+    contains(markdown, "Tool")
+    contains(markdown, "Description")
+    contains(markdown, "When to Use")
+    contains(markdown, "|")
 
 
 def test_to_markdown_with_no_docstring():
@@ -73,12 +74,12 @@ def test_to_markdown_with_no_docstring():
     toolkit.add(no_docs)
     markdown = toolkit.to_markdown()
 
-    assert "`no_docs`" in markdown
-    assert "No description available" in markdown
+    contains(markdown, "`no_docs`")
+    contains(markdown, "No description available")
     # Verify header components are present
-    assert "Tool" in markdown
-    assert "Description" in markdown
-    assert "When to Use" in markdown
+    contains(markdown, "Tool")
+    contains(markdown, "Description")
+    contains(markdown, "When to Use")
 
 
 def test_to_markdown_with_only_first_line_docstring():
@@ -93,8 +94,8 @@ def test_to_markdown_with_only_first_line_docstring():
     toolkit.add(simple_doc)
     markdown = toolkit.to_markdown()
 
-    assert "`simple_doc`" in markdown
-    assert "Just a simple one-line docstring." in markdown
+    contains(markdown, "`simple_doc`")
+    contains(markdown, "Just a simple one-line docstring.")
 
 
 def test_to_markdown_with_multiline_docs():
@@ -119,16 +120,16 @@ def test_to_markdown_with_multiline_docs():
     markdown = toolkit.to_markdown()
 
     # Verify the tool name is present
-    assert "`multiline_doc`" in markdown
+    contains(markdown, "`multiline_doc`")
 
     # Check that the multiline description is combined into a single line
-    assert (
-        "Performs a comprehensive search across multiple databases and knowledge sources to find relevant information."
-        in markdown
+    contains(
+        markdown,
+        "Performs a comprehensive search across multiple databases and knowledge sources to find relevant information.",
     )
 
     # Check that the multiline usage is combined into a single line
-    assert (
-        "Use this tool when you need to find specific information about a topic or answer complex questions that require searching through data."
-        in markdown
+    contains(
+        markdown,
+        "Use this tool when you need to find specific information about a topic or answer complex questions that require searching through data.",
     )
