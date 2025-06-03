@@ -1,9 +1,15 @@
 import time
 import statistics
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import psutil
 import os
+import pytest
 from vaul import Toolkit, tool_call
+
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
 
 
 @tool_call
@@ -121,6 +127,7 @@ class TestPerformanceBenchmarks:
         assert add_time < 1.0, f"Adding tools too slow: {add_time}s"
         assert schema_time < 0.5, f"Schema generation too slow: {schema_time}s"
 
+    @pytest.mark.skipif(not HAS_PSUTIL, reason="psutil not available")
     def test_memory_usage_monitoring(self):
         """Monitor memory usage during operations."""
         process = psutil.Process(os.getpid())
