@@ -6,7 +6,7 @@ def validate_tool_call(
 ) -> bool:
     if throw_error:
         assert "tool_calls" in message, "No tool call detected"
-        assert (
-            message["tool_calls"][0]["function"]["name"] == schema["name"]
-        ), "Function name does not match"
+        assert message["tool_calls"][0]["function"]["name"] == schema["name"], (
+            "Function name does not match"
+        )
     return throw_error

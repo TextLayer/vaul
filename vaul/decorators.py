@@ -66,7 +66,7 @@ class StructuredOutput(BaseTool):
 
     @classmethod
     def _validate_tool_call(cls, message, throw_error=True):
-        validate_tool_call(message, cls.tool_call_schema, throw_error)
+        return validate_tool_call(message, cls.tool_call_schema, throw_error)
 
     @classmethod
     def from_response(cls, completion, throw_error=True):
@@ -75,9 +75,9 @@ class StructuredOutput(BaseTool):
         message = completion.choices[0].message.model_dump(exclude_unset=True)
         if throw_error:
             assert "tool_calls" in message, "No tool call detected"
-            assert (
-                message["tool_calls"][0]["function"]["name"] == cls.__name__
-            ), "Function name does not match"
+            assert message["tool_calls"][0]["function"]["name"] == cls.__name__, (
+                "Function name does not match"
+            )
 
         return cls(
             **json.loads(
@@ -137,17 +137,15 @@ class ToolCall(BaseTool):
 
     def _generate_tool_call_schema(self) -> Dict[str, Any]:
         sig = inspect.signature(self.func)
-        
-        # Analyze function parameters
-        
+
         schema = {}
         properties = {}
         required = []
-        
+
         for name, param in sig.parameters.items():
             if name in ("args", "kwargs"):
                 continue
-                
+
             if param.annotation is not inspect.Parameter.empty:
                 try:
                     param_adapter = TypeAdapter(param.annotation)
@@ -157,14 +155,14 @@ class ToolCall(BaseTool):
                     properties[name] = {"type": "object"}
             else:
                 properties[name] = {"type": "object"}
-                
+
             if param.default is inspect.Parameter.empty:
                 required.append(name)
-        
+
         schema["properties"] = properties
         schema["required"] = sorted(required) if required else []
         schema["type"] = "object"
-        
+
         schema = remove_keys_recursively(schema, "additionalProperties")
         schema = remove_keys_recursively(schema, "title")
 
@@ -183,6 +181,7 @@ class ToolCall(BaseTool):
                 if self.raise_for_exception:
                     raise
                 return str(e)
+
         return wrapper(*args, **kwargs)
 
     def _validate_tool_call(
@@ -196,9 +195,9 @@ class ToolCall(BaseTool):
         message = completion.choices[0].message.model_dump(exclude_unset=True)
         if throw_error:
             assert "tool_calls" in message, "No tool call detected"
-            assert (
-                message["tool_calls"][0]["function"]["name"] == self.func.__name__
-            ), "Function name does not match"
+            assert message["tool_calls"][0]["function"]["name"] == self.func.__name__, (
+                "Function name does not match"
+            )
 
         return self.validate_func(
             **json.loads(
@@ -221,6 +220,8 @@ def tool_call(func: Callable = None, *, raise_for_exception: bool = False) -> To
     """
     if func is not None and callable(func):
         return ToolCall(func, raise_for_exception=raise_for_exception)
+
     def wrapper(f):
         return ToolCall(f, raise_for_exception=raise_for_exception)
+
     return wrapper

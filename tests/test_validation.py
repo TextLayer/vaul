@@ -1,12 +1,13 @@
 import pytest
 from vaul import validation
+from tests.utils.assertion import is_true, is_false
 
 
 def test_validate_tool_call_success():
     """Test successful tool call validation."""
     message = {"tool_calls": [{"function": {"name": "test_function"}}]}
     schema = {"name": "test_function"}
-    assert validation.validate_tool_call(message, schema) is True
+    is_true(validation.validate_tool_call(message, schema))
 
 
 def test_validate_tool_call_no_tool_calls():
@@ -29,4 +30,4 @@ def test_validate_tool_call_no_throw():
     """Test validation when throw_error is False."""
     message = {"some_other_key": "value"}
     schema = {"name": "test_function"}
-    assert validation.validate_tool_call(message, schema, throw_error=False) is False
+    is_false(validation.validate_tool_call(message, schema, throw_error=False))

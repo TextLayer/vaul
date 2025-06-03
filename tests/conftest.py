@@ -1,7 +1,6 @@
 import pytest
 
 
-# Add any shared fixtures here
 @pytest.fixture
 def sample_tool_dict():
     """Fixture providing a sample tool dictionary for testing."""
