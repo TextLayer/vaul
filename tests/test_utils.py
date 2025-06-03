@@ -23,22 +23,9 @@ def test_remove_keys_recursively_multiple_keys():
 
 def test_remove_keys_recursively_nested_dict():
     """Test removing keys from a nested dictionary."""
-    input_dict = {
-        "a": 1,
-        "b": {
-            "c": 2,
-            "d": 3
-        },
-        "e": 4
-    }
+    input_dict = {"a": 1, "b": {"c": 2, "d": 3}, "e": 4}
     result = utils.remove_keys_recursively(input_dict, "c")
-    assert result == {
-        "a": 1,
-        "b": {
-            "d": 3
-        },
-        "e": 4
-    }
+    assert result == {"a": 1, "b": {"d": 3}, "e": 4}
 
 
 def test_remove_keys_recursively_type_error():
