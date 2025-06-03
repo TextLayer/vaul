@@ -49,7 +49,6 @@ def test_remove_tool():
     is_true(toolkit.remove("add_numbers"))
     is_equal(len(toolkit), 0)
     is_equal(toolkit.has_tools(), False)
-    # Test removing non-existent tool
     is_equal(toolkit.remove("non_existent"), False)
 
 

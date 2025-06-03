@@ -138,8 +138,6 @@ class ToolCall(BaseTool):
     def _generate_tool_call_schema(self) -> Dict[str, Any]:
         sig = inspect.signature(self.func)
 
-        # Analyze function parameters
-
         schema = {}
         properties = {}
         required = []

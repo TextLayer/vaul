@@ -40,7 +40,6 @@ class Toolkit:
         """
         Initialize a new Toolkit with an empty registry of tools.
         """
-        # Create a DataFrame with columns for the tool name and the tool object
         self._tools_df = pd.DataFrame(columns=["name", "tool"])
 
     def add(self, tool: ToolCall) -> None:
@@ -70,11 +69,9 @@ class Toolkit:
 
         tool_name = tool.func.__name__
 
-        # Check if tool with same name already exists
         if not self._tools_df[self._tools_df["name"] == tool_name].empty:
             raise ValueError(f"A tool with name '{tool_name}' is already registered")
 
-        # Add the tool to the DataFrame
         new_row = pd.DataFrame({"name": [tool_name], "tool": [tool]})
         self._tools_df = pd.concat([self._tools_df, new_row], ignore_index=True)
 
@@ -162,11 +159,9 @@ class Toolkit:
                 print(f"Tool: {name}")
             ```
         """
-        # Handle empty DataFrame case
         if self._tools_df.empty:
             return {}
 
-        # Convert the DataFrame back to a dictionary for compatibility
         return dict(zip(self._tools_df["name"], self._tools_df["tool"]))
 
     @property
@@ -245,13 +240,11 @@ class Toolkit:
             print(result)  # Output: 8
             ```
         """
-        # Find the tool by name in the DataFrame
         tool = self.get_tool(name)
 
         if tool is None:
             raise ValueError(f"Tool '{name}' not found in registry.")
 
-        # Merge the arguments and kwargs into a single dictionary
         merged_arguments = {**arguments, **kwargs}
 
         return tool.run(merged_arguments)
@@ -367,13 +360,11 @@ class Toolkit:
         if self._tools_df.empty:
             return "No tools registered."
 
-        # Create table data with tool information
         data = []
         for _, row in self._tools_df.iterrows():
             tool_info = self._extract_tool_info(row["tool"], row["name"])
             data.append(tool_info)
 
-        # Create the markdown table with tabulate
         headers = ["Tool", "Description", "When to Use"]
         table = tabulate(data, headers=headers, tablefmt="pipe")
 
@@ -397,37 +388,29 @@ class Toolkit:
             docstring = tool.func.__doc__.strip()
             doc_lines = docstring.split("\n")
 
-            # First line is the default description
             if doc_lines:
                 description = doc_lines[0].strip()
 
-            # Process the docstring to handle multiline descriptions and usage
             current_section = None
             section_content = []
 
             for i, line in enumerate(doc_lines):
                 line = line.strip()
 
-                # Check for section tags
                 if line.lower().startswith("desc:"):
-                    # If we were in a "usage" section, save its content
                     if current_section == "usage" and section_content:
                         usage = " ".join(section_content)
 
-                    # Start a new "desc" section
                     current_section = "desc"
                     section_content = [line[len("desc:") :].strip()]
 
                 elif line.lower().startswith("usage:"):
-                    # If we were in a "desc" section, save its content
                     if current_section == "desc" and section_content:
                         description = " ".join(section_content)
 
-                    # Start a new "usage" section
                     current_section = "usage"
                     section_content = [line[len("usage:") :].strip()]
 
-                # Continue with current section if not a new tag and not the first line (which is handled separately)
                 elif (
                     current_section
                     and i > 0
@@ -436,13 +419,11 @@ class Toolkit:
                 ):
                     section_content.append(line)
 
-            # Save the content of the last section
             if current_section == "desc" and section_content:
                 description = " ".join(section_content)
             elif current_section == "usage" and section_content:
                 usage = " ".join(section_content)
 
-        # Format the name with code formatting
         formatted_name = f"`{name}`"
 
         return [formatted_name, description, usage]

@@ -45,17 +45,14 @@ def test_to_markdown_with_tools():
 
     markdown = toolkit.to_markdown()
 
-    # Verify the table contains the expected tool names and descriptions
     contains(markdown, "`add_numbers`")
     contains(markdown, "`subtract_numbers`")
     contains(markdown, "`multiply_numbers`")
     contains(markdown, "Adds two numbers together.")
     contains(markdown, "Subtracts the second number from the first.")
     contains(markdown, "Multiplies two numbers together.")
-    # Verify it has the usage information
     contains(markdown, "When you need to calculate the sum of two numbers.")
     contains(markdown, "When you need to calculate the difference between two numbers.")
-    # Verify it's in markdown table format with the expected headers
     contains(markdown, "### Tools")
     contains(markdown, "Tool")
     contains(markdown, "Description")
@@ -76,7 +73,6 @@ def test_to_markdown_with_no_docstring():
 
     contains(markdown, "`no_docs`")
     contains(markdown, "No description available")
-    # Verify header components are present
     contains(markdown, "Tool")
     contains(markdown, "Description")
     contains(markdown, "When to Use")
@@ -119,16 +115,13 @@ def test_to_markdown_with_multiline_docs():
     toolkit.add(multiline_doc)
     markdown = toolkit.to_markdown()
 
-    # Verify the tool name is present
     contains(markdown, "`multiline_doc`")
 
-    # Check that the multiline description is combined into a single line
     contains(
         markdown,
         "Performs a comprehensive search across multiple databases and knowledge sources to find relevant information.",
     )
 
-    # Check that the multiline usage is combined into a single line
     contains(
         markdown,
         "Use this tool when you need to find specific information about a topic or answer complex questions that require searching through data.",

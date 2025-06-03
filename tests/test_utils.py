@@ -33,6 +33,3 @@ def test_remove_keys_recursively_type_error():
     """Test that TypeError is raised when input is not a dictionary."""
     with pytest.raises(TypeError):
         utils.remove_keys_recursively("not a dict", "key")
-
-
-# Add more specific tests based on the functions in utils.py

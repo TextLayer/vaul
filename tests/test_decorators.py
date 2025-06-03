@@ -39,7 +39,6 @@ def test_structured_output_validation():
         ]
     }
 
-    # Mock completion object
     class MockCompletion:
         class Choice:
             class Message(BaseModel):
@@ -213,7 +212,6 @@ def test_tool_call_exception_handling():
     is_true(isinstance(result, str))
     is_equal(result, "Test error")
 
-    # error_function_raise should raise
     with pytest.raises(ValueError, match="Test error"):
         error_function_raise(42)
 
@@ -224,6 +222,5 @@ def test_tool_call_run_exception_handling():
     is_true(isinstance(result, str))
     is_equal(result, "Test error")
 
-    # error_function_raise should raise
     with pytest.raises(ValueError, match="Test error"):
         error_function_raise.run({"x": 42})

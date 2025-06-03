@@ -17,11 +17,9 @@ def remove_keys_recursively(
     - TypeError: If the input is not a dictionary.
     """
 
-    # Error handling
     if not isinstance(d, dict):
         raise TypeError("Input should be a dictionary.")
 
-    # Make keys_to_remove a list if it's a single string
     if isinstance(keys_to_remove, str):
         keys_to_remove = [keys_to_remove]
 
