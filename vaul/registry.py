@@ -4,6 +4,7 @@ import pandas as pd
 from tabulate import tabulate
 
 from vaul.decorators import ToolCall
+from vaul.openapi import tools_from_openapi
 
 
 class Toolkit:
@@ -40,9 +41,9 @@ class Toolkit:
         """
         Initialize a new Toolkit with an empty registry of tools.
         """
-        self._tools_df = pd.DataFrame(columns=["name", "tool"])
+        self._tools_df = pd.DataFrame(columns=["name", "tool", "source"])
 
-    def add(self, tool: ToolCall) -> None:
+    def add(self, tool: ToolCall, source: str = "local") -> None:
         """
         Register a tool call instance in the toolkit.
 
@@ -72,10 +73,10 @@ class Toolkit:
         if not self._tools_df[self._tools_df["name"] == tool_name].empty:
             raise ValueError(f"A tool with name '{tool_name}' is already registered")
 
-        new_row = pd.DataFrame({"name": [tool_name], "tool": [tool]})
+        new_row = pd.DataFrame({"name": [tool_name], "tool": [tool], "source": [source]})
         self._tools_df = pd.concat([self._tools_df, new_row], ignore_index=True)
 
-    def add_tools(self, *tools: ToolCall) -> None:
+    def add_tools(self, *tools: ToolCall, source: str = "local") -> None:
         """
         Register multiple tool call instances in the toolkit at once.
 
@@ -107,7 +108,12 @@ class Toolkit:
             ```
         """
         for tool in tools:
-            self.add(tool)
+            self.add(tool, source=source)
+
+    def add_openapi(self, spec: Any) -> None:
+        """Add tools from an OpenAPI specification string or URL."""
+        for tool in tools_from_openapi(spec):
+            self.add(tool, source="openapi")
 
     def remove(self, name: str) -> bool:
         """
@@ -296,7 +302,7 @@ class Toolkit:
             print(len(toolkit))  # Output: 0
             ```
         """
-        self._tools_df = pd.DataFrame(columns=["name", "tool"])
+        self._tools_df = pd.DataFrame(columns=["name", "tool", "source"])
 
     def has_tools(self) -> bool:
         """
