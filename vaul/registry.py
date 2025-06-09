@@ -115,6 +115,13 @@ class Toolkit:
         for tool in tools_from_openapi(spec):
             self.add(tool, source="openapi")
 
+    def add_mcp(self, session: Any) -> None:
+        """Add tools from an MCP ``ClientSession``."""
+        from vaul.mcp import tools_from_mcp
+
+        for tool in tools_from_mcp(session):
+            self.add(tool, source="mcp")
+
     def remove(self, name: str) -> bool:
         """
         Unregister a tool by name from the toolkit.
