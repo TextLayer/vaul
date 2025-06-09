@@ -14,6 +14,8 @@ setup(
         'pydantic>=2.6.4',
         'pandas>=2.0.0',
         'tabulate>=0.9.0',
+        'pyyaml>=6.0',
+        'requests>=2.0',
     ],
     packages=find_packages(),
     python_requires='>=3.6',
