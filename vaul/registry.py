@@ -1,9 +1,10 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 
 import pandas as pd
 from tabulate import tabulate
 
 from vaul.decorators import ToolCall
+from .rerankers import BaseReranker
 
 
 class Toolkit:
@@ -36,11 +37,15 @@ class Toolkit:
         ```
     """
 
-    def __init__(self):
-        """
-        Initialize a new Toolkit with an empty registry of tools.
+    def __init__(self, reranker: Optional["BaseReranker"] = None):
+        """Initialize a new Toolkit with an empty registry of tools.
+
+        Args:
+            reranker: Optional reranker used to filter tool schemas based on a
+                query.
         """
         self._tools_df = pd.DataFrame(columns=["name", "tool", "source"])
+        self._reranker = reranker
 
     def add(self, tool: ToolCall, source: str = "local") -> None:
         """
@@ -368,7 +373,12 @@ class Toolkit:
 
         return tool.run(merged_arguments)
 
-    def tool_schemas(self) -> List[Dict[str, Any]]:
+    def tool_schemas(
+        self,
+        messages: Optional[Union[str, List[Dict[str, Any]]]] = None,
+        top_n: Optional[int] = None,
+        score_threshold: float = 0.5,
+    ) -> List[Dict[str, Any]]:
         """
         Retrieve a list of tool call schemas for all registered tools.
 
@@ -396,9 +406,42 @@ class Toolkit:
         if self._tools_df.empty:
             return []
 
+        tools = list(self._tools_df.itertuples())
+
+        def _extract_text(msg: Dict[str, Any]) -> str:
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                return content
+            if isinstance(content, list):
+                parts = []
+                for c in content:
+                    if isinstance(c, dict):
+                        if c.get("type") == "text":
+                            text = c.get("text", "")
+                            if isinstance(text, dict):
+                                parts.append(str(text.get("value", "")))
+                            else:
+                                parts.append(str(text))
+                return " ".join(parts)
+            return str(content)
+
+        if self._reranker and messages:
+            if isinstance(messages, str):
+                query = messages
+            else:
+                query = " ".join(_extract_text(m) for m in messages)
+
+            documents = [f"{t.name}: {t.tool.func.__doc__ or ''}" for t in tools]
+            limit = top_n or len(documents)
+            ranked = self._reranker.rerank(query=query, documents=documents, top_n=limit)
+            ranked = [r for r in ranked if r.relevance_score >= score_threshold]
+            tools = [tools[r.index] for r in ranked]
+        elif top_n is not None:
+            tools = tools[:top_n]
+
         return [
-            {"type": "function", "function": tool["tool"].tool_call_schema}
-            for _, tool in self._tools_df.iterrows()
+            {"type": "function", "function": t.tool.tool_call_schema}
+            for t in tools
         ]
 
     def clear(self) -> None:
