@@ -4,7 +4,6 @@ import pandas as pd
 from tabulate import tabulate
 
 from vaul.decorators import ToolCall
-from vaul.openapi import tools_from_openapi
 
 
 class Toolkit:
@@ -110,10 +109,124 @@ class Toolkit:
         for tool in tools:
             self.add(tool, source=source)
 
-    def add_openapi(self, spec: Any) -> None:
-        """Add tools from an OpenAPI specification string or URL."""
-        for tool in tools_from_openapi(spec):
+    def add_openapi(self, spec: Any, headers: Optional[Dict[str, str]] = None, 
+                    params: Optional[Dict[str, str]] = None, 
+                    session: Optional[Any] = None,
+                    operation_ids: Optional[List[str]] = None) -> None:
+        """
+        Add tools from an OpenAPI specification.
+        
+        Args:
+            spec: OpenAPI specification as a URL, file path, dict, or YAML/JSON string
+            headers: Optional headers to include in API requests
+            params: Optional query parameters to include in API requests
+            session: Optional requests.Session for custom authentication
+            operation_ids: Optional list of operation IDs to import (imports all if None)
+            
+        Example:
+            ```python
+            # From URL
+            toolkit.add_openapi("https://api.example.com/openapi.json")
+            
+            # With authentication
+            toolkit.add_openapi(
+                "https://api.example.com/openapi.json",
+                headers={"X-API-Key": "your-key"}
+            )
+            
+            # Filter specific operations
+            toolkit.add_openapi(
+                "https://api.example.com/openapi.json",
+                operation_ids=["getUserById", "createUser"]
+            )
+            ```
+        """
+        from vaul.openapi import tools_from_openapi
+        
+        tools = tools_from_openapi(
+            spec, 
+            headers=headers, 
+            params=params, 
+            session=session,
+            operation_ids=operation_ids
+        )
+        
+        for tool in tools:
             self.add(tool, source="openapi")
+
+    def add_mcp(self, mcp_source: Any, **kwargs) -> None:
+        """
+        Add tools from an MCP server.
+        
+        Args:
+            mcp_source: Can be one of:
+                - ClientSession: An existing MCP ClientSession
+                - str: URL for SSE-based MCP server (e.g., "https://mcp.example.com/sse")
+                - dict: Configuration for stdio-based MCP server with keys:
+                    - command: Command to run (required)
+                    - args: List of arguments (optional)
+                    - env: Environment variables (optional)
+            **kwargs: Additional arguments passed to the MCP loader functions
+        
+        Example:
+            ```python
+            toolkit = Toolkit()
+            
+            # Add from URL-based MCP server
+            toolkit.add_mcp("https://actions.zapier.com/mcp/sse")
+            
+            # Add from stdio-based MCP server
+            toolkit.add_mcp({
+                "command": "python3",
+                "args": ["./mcp_server.py"]
+            })
+            
+            # Add from existing session
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                toolkit.add_mcp(session)
+            ```
+        """
+        from vaul.mcp import tools_from_mcp, tools_from_mcp_url, tools_from_mcp_stdio
+        
+        # Determine the type of MCP source and load tools accordingly
+        if hasattr(mcp_source, 'call_tool'):
+            # It's a ClientSession
+            tools = tools_from_mcp(mcp_source)
+        elif isinstance(mcp_source, str):
+            # It's a URL
+            tools = tools_from_mcp_url(mcp_source, **kwargs)
+        elif isinstance(mcp_source, dict):
+            # It's a stdio configuration
+            self._validate_stdio_config(mcp_source)
+            tools = tools_from_mcp_stdio(
+                command=mcp_source['command'],
+                args=mcp_source.get('args', []),
+                env=mcp_source.get('env')
+            )
+        else:
+            raise TypeError(
+                f"Unsupported MCP source type: {type(mcp_source).__name__}. "
+                "Expected ClientSession, str (URL), or dict (stdio config)."
+            )
+        
+        # Add all loaded tools to the registry
+        for tool in tools:
+            self.add(tool, source="mcp")
+    
+    def _validate_stdio_config(self, config: dict) -> None:
+        """Validate stdio configuration dictionary."""
+        if 'command' not in config:
+            raise ValueError("MCP stdio configuration must include 'command'")
+        
+        if not isinstance(config['command'], str):
+            raise TypeError("'command' must be a string")
+        
+        if 'args' in config and not isinstance(config['args'], list):
+            raise TypeError("'args' must be a list of strings")
+        
+        if 'env' in config and not isinstance(config['env'], dict):
+            raise TypeError("'env' must be a dictionary")
 
     def remove(self, name: str) -> bool:
         """

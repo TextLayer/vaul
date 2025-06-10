@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [tool.pytest.ini_options]
 addopts = "--cov=vaul --cov-report=term-missing --cov-fail-under=85"
 testpaths = ["tests"]
