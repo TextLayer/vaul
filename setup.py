@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="vaul",
-    version='0.3.0',
+    version='v1.0',
     description="A lightweight Python library for building agentic actions and workflows.",
     author="Spencer Porter",
     long_description=long_description,
