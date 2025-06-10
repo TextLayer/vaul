@@ -1,5 +1,5 @@
 import re
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Union, Optional
 
 import requests
 import yaml
@@ -8,18 +8,46 @@ from .decorators import tool_call, ToolCall
 from .utils import remove_keys_recursively
 
 
-def _create_api_tool(name: str, method: str, url: str, description: str, schema: Dict[str, Any]) -> ToolCall:
+def _create_api_tool(name: str, method: str, url: str, description: str, 
+                     schema: Dict[str, Any], headers: Optional[Dict[str, str]] = None,
+                     params: Optional[Dict[str, str]] = None,
+                     session: Optional[requests.Session] = None) -> ToolCall:
     """Create a ToolCall that performs an HTTP request."""
 
     def api_function(**kwargs):
         local_url = url
+        # Replace path parameters
         for param in re.findall(r"{(.*?)}", url):
             if param in kwargs:
                 local_url = local_url.replace(f"{{{param}}}", str(kwargs.pop(param)))
+        
+        # Prepare request arguments
+        request_kwargs = {
+            "method": method,
+            "url": local_url
+        }
+        
+        # Add headers if provided
+        if headers:
+            request_kwargs["headers"] = headers.copy()
+        
+        # Add query params
         if method.upper() == "GET":
-            response = requests.request(method, local_url, params=kwargs)
+            if params:
+                request_kwargs["params"] = {**params, **kwargs}
+            else:
+                request_kwargs["params"] = kwargs
         else:
-            response = requests.request(method, local_url, json=kwargs)
+            request_kwargs["json"] = kwargs
+            if params:
+                request_kwargs["params"] = params
+        
+        # Use session if provided, otherwise use requests
+        if session:
+            response = session.request(**request_kwargs)
+        else:
+            response = requests.request(**request_kwargs)
+            
         try:
             return response.json()
         except Exception:
@@ -33,15 +61,41 @@ def _create_api_tool(name: str, method: str, url: str, description: str, schema:
     return tool
 
 
-def tools_from_openapi(spec: Union[str, Dict[str, Any]]) -> List[ToolCall]:
-    """Convert an OpenAPI specification to ToolCall instances."""
+def tools_from_openapi(spec: Union[str, Dict[str, Any]], 
+                      headers: Optional[Dict[str, str]] = None,
+                      params: Optional[Dict[str, str]] = None,
+                      session: Optional[requests.Session] = None,
+                      operation_ids: Optional[List[str]] = None) -> List[ToolCall]:
+    """
+    Convert an OpenAPI specification to ToolCall instances.
+    
+    Args:
+        spec: OpenAPI specification as a URL, file path, dict, or YAML/JSON string
+        headers: Optional headers to include in all API requests
+        params: Optional query parameters to include in all API requests
+        session: Optional requests.Session for custom authentication
+        operation_ids: Optional list of operation IDs to import (imports all if None)
+        
+    Returns:
+        List of ToolCall instances for the OpenAPI operations
+    """
     if isinstance(spec, dict):
         spec_dict = spec
     else:
         if spec.strip().startswith("http://") or spec.strip().startswith("https://"):
-            text = requests.get(spec).text
+            # Use session if provided for fetching the spec
+            if session:
+                text = session.get(spec).text
+            else:
+                text = requests.get(spec).text
         else:
-            text = spec
+            # Try to read as file first
+            try:
+                with open(spec, 'r') as f:
+                    text = f.read()
+            except:
+                # If not a file, treat as raw YAML/JSON string
+                text = spec
         spec_dict = yaml.safe_load(text)
 
     base_url = ""
@@ -56,16 +110,22 @@ def tools_from_openapi(spec: Union[str, Dict[str, Any]]) -> List[ToolCall]:
             if method.lower() not in {"get", "post", "put", "delete", "patch"}:
                 continue
 
-            name = operation.get("operationId") or f"{method}_{path.strip('/').replace('/', '_')}"
+            operation_id = operation.get("operationId")
+            name = operation_id or f"{method}_{path.strip('/').replace('/', '_').replace('{', '').replace('}', '')}"
+            
+            # Skip if operation_ids filter is provided and this operation is not in it
+            if operation_ids and operation_id not in operation_ids:
+                continue
+                
             description = operation.get("summary") or operation.get("description", "")
 
             properties: Dict[str, Any] = {}
             required: List[str] = []
-            params = []
-            params.extend(path_item.get("parameters", []))
-            params.extend(operation.get("parameters", []))
+            params_list = []
+            params_list.extend(path_item.get("parameters", []))
+            params_list.extend(operation.get("parameters", []))
 
-            for param in params:
+            for param in params_list:
                 if "$ref" in param:
                     continue
                 schema = param.get("schema", {"type": "string"})
@@ -95,7 +155,10 @@ def tools_from_openapi(spec: Union[str, Dict[str, Any]]) -> List[ToolCall]:
 
             schema = {"name": name, "description": description, "parameters": param_schema}
 
-            tool = _create_api_tool(name, method.upper(), base_url + path, description, schema)
+            tool = _create_api_tool(
+                name, method.upper(), base_url + path, description, schema,
+                headers=headers, params=params, session=session
+            )
             tools.append(tool)
 
     return tools

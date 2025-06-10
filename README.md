@@ -16,6 +16,8 @@ Vaul is a library designed to help developers create tool calls for AI systems, 
     - [Keeping System Prompts in Sync with Toolkits](#keeping-system-prompts-in-sync-with-toolkits)
   - [Interacting with OpenAI](#interacting-with-openai)
   - [More Complex Examples](#more-complex-examples)
+  - [OpenAPI Integration](#openapi-integration)
+  - [MCP Server Integration](#mcp-server-integration)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -31,6 +33,9 @@ Vaul is designed to simplify the process of creating tool calls that can be used
 - **Seamless AI Integration**: Integrate tool calls with AI systems like OpenAI's GPT.
 - **Toolkit Management**: Organize and manage collections of tools with the Toolkit class.
 - **Documentation Generation**: Create beautiful markdown tables of your tools with `to_markdown()` to keep system prompts in sync with your toolkit.
+- **OpenAPI Integration**: Import tools from any OpenAPI specification, with support for authentication and operation filtering.
+- **MCP Server Support**: Connect to Model Context Protocol servers to access external tools via HTTP/SSE or stdio.
+- **Unified Tool Registry**: Combine local functions, OpenAPI endpoints, and MCP tools in a single toolkit.
 - **Customizable**: Define custom actions and manage them with ease.
 
 ## Installation
@@ -467,14 +472,221 @@ if tool_name:
         print(result)
     except ValueError as e:
         print(f"Error running tool: {e}")
+
+### OpenAPI Integration
+
+Vaul supports importing tools from OpenAPI specifications, allowing you to easily integrate external APIs as tool calls. This feature enables you to convert any OpenAPI-compliant API into tools that can be used by AI systems.
+
+#### Basic OpenAPI Usage
+
+```python
+from vaul import Toolkit
+
+# Create a toolkit
+toolkit = Toolkit()
+
+# Add tools from an OpenAPI specification URL
+toolkit.add_openapi("https://api.example.com/openapi.json")
+
+# Or add from a local OpenAPI file
+toolkit.add_openapi("path/to/openapi.yaml")
+
+# The toolkit now contains all operations from the OpenAPI spec as tools
+print(toolkit.tool_names)  # Lists all imported API operations
+
+# Use the tools as normal
+result = toolkit.run_tool("getUserById", {"userId": "123"})
+```
+
+#### OpenAPI with Authentication
+
+Many APIs require authentication. You can provide headers, query parameters, or use a custom session:
+
+```python
+# With API key in headers
+toolkit.add_openapi(
+    "https://api.example.com/openapi.json",
+    headers={"X-API-Key": "your-api-key"}
+)
+
+# With query parameters
+toolkit.add_openapi(
+    "https://api.example.com/openapi.json",
+    params={"api_key": "your-api-key"}
+)
+
+# With custom session for complex auth
+import requests
+session = requests.Session()
+session.headers.update({"Authorization": "Bearer your-token"})
+toolkit.add_openapi(
+    "https://api.example.com/openapi.json",
+    session=session
+)
+```
+
+#### Filtering OpenAPI Operations
+
+Large OpenAPI specifications might contain many operations. You can filter which operations to import:
+
+```python
+# Only import specific operations by ID
+toolkit.add_openapi(
+    "https://api.example.com/openapi.json",
+    operation_ids=["getUserById", "createUser", "updateUser"]
+)
+
+# The toolkit will only contain the specified operations
+```
+
+#### OpenAPI Tool Naming
+
+Tools imported from OpenAPI specs are named using their `operationId`. If an operation doesn't have an `operationId`, a name is generated from the HTTP method and path:
+
+- `GET /users/{id}` → `get_users_id`
+- `POST /users` → `post_users`
+- `DELETE /users/{id}` → `delete_users_id`
+
+### MCP Server Integration
+
+Vaul supports the Model Context Protocol (MCP), allowing you to integrate tools from MCP servers. MCP is an open protocol that enables seamless integration between AI applications and external data sources or tools.
+
+#### What is MCP?
+
+MCP (Model Context Protocol) is a protocol designed to provide context and tools to AI models. MCP servers can expose various tools that AI systems can use, similar to function calling but with a standardized protocol for tool discovery and execution.
+
+#### Basic MCP Usage
+
+```python
+from vaul import Toolkit
+
+# Create a toolkit
+toolkit = Toolkit()
+
+# Add tools from an MCP server via HTTP/SSE endpoint
+toolkit.add_mcp("http://localhost:3000/sse")
+
+# Add tools from an MCP server via stdio (subprocess)
+toolkit.add_mcp({
+    "command": "node",
+    "args": ["path/to/mcp-server.js"],
+    "env": {"API_KEY": "your-key"}  # Optional environment variables
+})
+
+# List all available tools from the MCP server
+print(toolkit.tool_names)
+
+# Execute MCP tools just like any other tool
+result = toolkit.run_tool("search_documents", {"query": "python tutorials"})
+```
+
+#### MCP Server Types
+
+Vaul supports two types of MCP server connections:
+
+1. **HTTP/SSE Servers**: Connect to MCP servers running as HTTP endpoints
+   ```python
+   toolkit.add_mcp("http://localhost:3000/sse")
+   ```
+
+2. **Stdio Servers**: Launch MCP servers as subprocesses
+   ```python
+   toolkit.add_mcp({
+       "command": "python",
+       "args": ["-m", "my_mcp_server"],
+       "env": {"CONFIG_PATH": "/path/to/config.json"}
+   })
+   ```
+
+#### Advanced MCP Usage
+
+You can also work directly with MCP client sessions for more control:
+
+```python
+from mcp import ClientSession
+from vaul import Toolkit
+
+# Create your own MCP client session
+async def setup_mcp_session():
+    session = ClientSession()
+    # Configure your session as needed
+    await session.initialize()
+    return session
+
+# Add the session to your toolkit
+session = await setup_mcp_session()
+toolkit.add_mcp(session)
+```
+
+#### MCP Tool Metadata
+
+Tools imported from MCP servers include their full metadata:
+
+```python
+# After adding MCP tools
+for tool_name in toolkit.tool_names:
+    tool = toolkit.get_tool(tool_name)
+    if hasattr(tool, 'mcp_tool'):
+        print(f"Tool: {tool_name}")
+        print(f"Description: {tool.mcp_tool.description}")
+        print(f"Parameters: {tool.mcp_tool.inputSchema}")
+```
+
+#### Example: Using Multiple Tool Sources
+
+One of Vaul's strengths is the ability to combine tools from different sources:
+
+```python
+from vaul import Toolkit, tool_call
+
+toolkit = Toolkit()
+
+# Add local tools
+@tool_call
+def calculate_discount(price: float, discount_percent: float) -> float:
+    """Calculate discounted price"""
+    return price * (1 - discount_percent / 100)
+
+toolkit.add(calculate_discount)
+
+# Add tools from OpenAPI
+toolkit.add_openapi("https://api.store.com/openapi.json")
+
+# Add tools from MCP servers
+toolkit.add_mcp("http://localhost:3000/sse")  # Analytics MCP server
+toolkit.add_mcp({
+    "command": "node",
+    "args": ["./inventory-mcp-server.js"]
+})  # Inventory MCP server
+
+# Now you have a unified toolkit with tools from all sources
+print(f"Total tools available: {len(toolkit.tool_names)}")
+
+# Use with OpenAI
+response = openai_session.chat.completions.create(
+    model="gpt-4",
+    messages=[
+        {"role": "system", "content": "You are a helpful store assistant."},
+        {"role": "user", "content": "What's the discounted price for item SKU-123 with a 20% discount?"}
+    ],
+    tools=toolkit.tool_schemas()
+)
+
+# The AI can now use tools from any source to answer the question
 ```
 
 ## Roadmap
 
+- [x] OpenAPI specification support for importing external APIs as tools
+- [x] MCP (Model Context Protocol) server integration
 - [ ] Add support for other providers (e.g. Anthropic, Cohere, etc.)
 - [ ] Add examples for parallel tool calls
 - [ ] Better error handling and logging
 - [ ] Improved support for types and defaults
+- [ ] WebSocket support for MCP servers
+- [ ] Tool result streaming for long-running operations
+- [ ] Automatic retry logic with exponential backoff
+- [ ] Tool usage analytics and monitoring
 
 ## Contributing
 
