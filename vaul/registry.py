@@ -4,7 +4,6 @@ import pandas as pd
 from tabulate import tabulate
 
 from vaul.decorators import ToolCall
-from vaul.openapi import tools_from_openapi
 
 
 class Toolkit:

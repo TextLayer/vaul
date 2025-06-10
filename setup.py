@@ -20,5 +20,5 @@ setup(
         'nest-asyncio>=1.5.0',
     ],
     packages=find_packages(),
-    python_requires='>=3.6',
+    python_requires='>=3.10',
 )

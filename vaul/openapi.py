@@ -93,7 +93,7 @@ def tools_from_openapi(spec: Union[str, Dict[str, Any]],
             try:
                 with open(spec, 'r') as f:
                     text = f.read()
-            except:
+            except (OSError, IOError):
                 # If not a file, treat as raw YAML/JSON string
                 text = spec
         spec_dict = yaml.safe_load(text)
