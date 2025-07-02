@@ -120,4 +120,5 @@ def test_run_tool_with_invalid_arguments():
     toolkit.add(add_numbers)
     result = toolkit.run_tool("add_numbers", {"a": "not_an_int", "b": 3})
     is_true(isinstance(result, str))
-    contains(result.lower(), "can only concatenate str")
+    contains(result.lower(), "validation error")
+    contains(result.lower(), "input should be a valid integer")

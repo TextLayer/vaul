@@ -85,6 +85,11 @@ class StructuredOutput(BaseTool):
             )
         )
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]):
+        """Create an instance from a dictionary representation."""
+        return cls.model_validate(data)
+
 
 class ToolCall(BaseTool):
     """
@@ -207,7 +212,9 @@ class ToolCall(BaseTool):
 
     def run(self, arguments: Dict[str, Any]) -> Any:
         try:
-            return self.func(**arguments)
+            # Use the validated wrapper to automatically parse and validate
+            # arguments just like direct function calls
+            return self.validate_func(**arguments)
         except Exception as e:
             if self.raise_for_exception:
                 raise

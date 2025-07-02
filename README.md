@@ -11,6 +11,7 @@ Vaul is a library designed to help developers create tool calls for AI systems, 
 - [Installation](#installation)
 - [Usage](#usage)
   - [Defining Tool Calls](#defining-tool-calls)
+  - [StructuredOutput Parameters](#structuredoutput-parameters)
   - [Managing Tool Calls with Toolkit](#managing-tool-calls-with-toolkit)
   - [Tool Documentation Format](#tool-documentation-format)
     - [Keeping System Prompts in Sync with Toolkits](#keeping-system-prompts-in-sync-with-toolkits)
@@ -53,11 +54,39 @@ pip install vaul
 Vaul allows you to define tool calls using simple decorators. Here is an example of how to define a function that can be utilized by an AI system:
 
 ```python
+
 from vaul import tool_call
 
 @tool_call
 def add_numbers(a: int, b: int) -> int:
     return a + b
+```
+
+### StructuredOutput Parameters
+
+When a function parameter is a custom `StructuredOutput`, dictionaries are
+automatically converted to the appropriate model when the tool runs. You can
+still use `from_dict` for manual conversions:
+
+```python
+from vaul import tool_call, StructuredOutput, Toolkit
+
+class Address(StructuredOutput):
+    street: str
+    city: str
+
+@tool_call
+def process_address(address: Address) -> str:
+    return f"{address.city}: {address.street}"
+```
+
+Dictionaries passed via `Toolkit.run_tool` or the tool's `run()` method are
+parsed automatically:
+
+```python
+toolkit = Toolkit()
+toolkit.add(process_address)
+result = toolkit.run_tool("process_address", {"address": {"street": "Main", "city": "Paris"}})
 ```
 
 ### Managing Tool Calls with Toolkit
