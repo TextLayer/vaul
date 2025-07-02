@@ -212,7 +212,9 @@ class ToolCall(BaseTool):
 
     def run(self, arguments: Dict[str, Any]) -> Any:
         try:
-            return self.func(**arguments)
+            # Use the validated wrapper to automatically parse and validate
+            # arguments just like direct function calls
+            return self.validate_func(**arguments)
         except Exception as e:
             if self.raise_for_exception:
                 raise

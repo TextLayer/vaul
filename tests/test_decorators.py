@@ -64,6 +64,18 @@ def test_structured_output_from_dict():
     is_equal(output.optional, None)
 
 
+@tool_call
+def use_output(data: TestOutput) -> str:
+    """Function using StructuredOutput as argument."""
+    return f"{data.text}-{data.value}"
+
+
+def test_structured_output_auto_conversion_run():
+    """ToolCall.run should convert dictionaries to StructuredOutput."""
+    result = use_output.run({"data": {"value": 7, "text": "bar"}})
+    is_equal(result, "bar-7")
+
+
 def test_structured_output_validation_error():
     """Test validation errors in structured output."""
     message = {"no_tool_calls": {}}

@@ -64,12 +64,12 @@ def add_numbers(a: int, b: int) -> int:
 
 ### StructuredOutput Parameters
 
-When a function parameter is a custom `StructuredOutput`, the toolkit passes the
-argument as a plain dictionary. Convert it back into the Pydantic object with
-`from_dict` at the start of your function:
+When a function parameter is a custom `StructuredOutput`, dictionaries are
+automatically converted to the appropriate model when the tool runs. You can
+still use `from_dict` for manual conversions:
 
 ```python
-from vaul import tool_call, StructuredOutput
+from vaul import tool_call, StructuredOutput, Toolkit
 
 class Address(StructuredOutput):
     street: str
@@ -77,8 +77,16 @@ class Address(StructuredOutput):
 
 @tool_call
 def process_address(address: Address) -> str:
-    address = Address.from_dict(address)
     return f"{address.city}: {address.street}"
+```
+
+Dictionaries passed via `Toolkit.run_tool` or the tool's `run()` method are
+parsed automatically:
+
+```python
+toolkit = Toolkit()
+toolkit.add(process_address)
+result = toolkit.run_tool("process_address", {"address": {"street": "Main", "city": "Paris"}})
 ```
 
 ### Managing Tool Calls with Toolkit
