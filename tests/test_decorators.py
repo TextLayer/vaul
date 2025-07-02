@@ -55,6 +55,15 @@ def test_structured_output_validation():
     is_equal(output.optional, None)
 
 
+def test_structured_output_from_dict():
+    """Test creating StructuredOutput from a dictionary."""
+    data = {"value": 1, "text": "foo"}
+    output = TestOutput.from_dict(data)
+    is_equal(output.value, 1)
+    is_equal(output.text, "foo")
+    is_equal(output.optional, None)
+
+
 def test_structured_output_validation_error():
     """Test validation errors in structured output."""
     message = {"no_tool_calls": {}}

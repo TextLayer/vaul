@@ -85,6 +85,11 @@ class StructuredOutput(BaseTool):
             )
         )
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]):
+        """Create an instance from a dictionary representation."""
+        return cls.model_validate(data)
+
 
 class ToolCall(BaseTool):
     """
