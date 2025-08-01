@@ -79,10 +79,8 @@ class StructuredOutput(BaseTool):
                 "Function name does not match"
             )
 
-        return cls(
-            **json.loads(
-                message["tool_calls"][0]["function"]["arguments"], strict=False
-            )
+        return cls.model_validate_json(
+            message["tool_calls"][0]["function"]["arguments"], strict=True
         )
 
     @classmethod

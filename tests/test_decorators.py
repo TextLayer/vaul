@@ -1,9 +1,9 @@
 import json
 from typing import Optional
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from vaul.decorators import StructuredOutput, tool_call
-from tests.utils.assertion import is_equal, is_true, contains
+from tests.utils.assertion import is_equal, contains
 
 
 class TestOutput(StructuredOutput):
@@ -74,6 +74,47 @@ def test_structured_output_auto_conversion_run():
     """ToolCall.run should convert dictionaries to StructuredOutput."""
     result = use_output.run({"data": {"value": 7, "text": "bar"}})
     is_equal(result, "bar-7")
+
+
+def test_structured_output_argument_validation():
+    """Invalid StructuredOutput args should raise ValidationError."""
+    with pytest.raises(ValidationError):
+        use_output.run({"data": {"value": "bad", "text": "bar"}})
+
+
+def test_structured_output_argument_validation_direct():
+    """Direct call should also validate StructuredOutput arguments."""
+    with pytest.raises(ValidationError):
+        use_output(data={"value": "bad", "text": "bar"})
+
+
+
+
+def test_structured_output_from_response_validation_error():
+    """Invalid structured output from LLM should raise ValidationError."""
+    message = {
+        "tool_calls": [
+            {
+                "function": {
+                    "name": "TestOutput",
+                    "arguments": json.dumps({"value": 42}),
+                }
+            }
+        ]
+    }
+
+    class MockCompletion:
+        class Choice:
+            class Message(BaseModel):
+                def model_dump(self, exclude_unset=True):
+                    return message
+
+            message = Message()
+
+        choices = [Choice()]
+
+    with pytest.raises(ValidationError):
+        TestOutput.from_response(MockCompletion())
 
 
 def test_structured_output_validation_error():
