@@ -16,18 +16,24 @@ class StructuredOutput(BaseTool):
     StructuredOutput is a base class that standardizes structured outputs from tool calls.
     It leverages Pydantic's BaseModel for input validation and schema generation.
 
+    This class provides comprehensive validation with different behaviors depending on context:
+    - Function calls and .run() method: Validation errors are caught and returned as error messages
+    - from_response() method: Uses strict validation and raises ValidationError for invalid LLM responses
+    - from_dict() method: Uses standard Pydantic validation
+
     Class Methods:
     - _generate_schema_parameters: Generates parameters for a structured output schema.
     - tool_call_schema: Generates the full schema of the tool call, including the name and required parameters.
     - _validate_tool_call: Validates whether the message has a 'tool_call' field and if the name matches the schema.
-    - from_response: Creates an instance from an OpenAI API response.
-    - run: Runs the function with the given arguments.
+    - from_response: Creates an instance from an OpenAI API response with strict validation.
+    - from_dict: Creates an instance from a dictionary with standard Pydantic validation.
 
     Example:
     ```python
-    class MyFunction(StructuredOutput):
-        arg1: int
-        arg2: str
+    class UserProfile(StructuredOutput):
+        name: str
+        age: int
+        email: str
     ```
 
     Attributes:
@@ -55,7 +61,6 @@ class StructuredOutput(BaseTool):
         return schema, parameters
 
     @classmethod
-    @property
     def tool_call_schema(cls):
         schema, parameters = cls._generate_schema_parameters()
         return {
@@ -70,7 +75,24 @@ class StructuredOutput(BaseTool):
 
     @classmethod
     def from_response(cls, completion, throw_error=True):
-        import json
+        """
+        Creates an instance from an OpenAI API response with strict validation.
+        
+        This method uses strict Pydantic validation to ensure data integrity
+        when parsing LLM responses. If validation fails, a ValidationError
+        is raised rather than returning an error message.
+        
+        Args:
+            completion: OpenAI API response object
+            throw_error: Whether to raise errors for missing tool calls
+            
+        Returns:
+            Validated instance of the StructuredOutput class
+            
+        Raises:
+            ValidationError: If the LLM response data doesn't match the schema
+            AssertionError: If no tool call is detected or function name doesn't match
+        """
 
         message = completion.choices[0].message.model_dump(exclude_unset=True)
         if throw_error:
@@ -85,7 +107,21 @@ class StructuredOutput(BaseTool):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]):
-        """Create an instance from a dictionary representation."""
+        """
+        Create an instance from a dictionary representation with standard Pydantic validation.
+        
+        This method uses standard Pydantic validation. If validation fails,
+        a ValidationError is raised.
+        
+        Args:
+            data: Dictionary containing the data to validate
+            
+        Returns:
+            Validated instance of the StructuredOutput class
+            
+        Raises:
+            ValidationError: If the data doesn't match the schema
+        """
         return cls.model_validate(data)
 
 

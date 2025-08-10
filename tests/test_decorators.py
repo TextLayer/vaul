@@ -3,7 +3,7 @@ from typing import Optional
 import pytest
 from pydantic import BaseModel, ValidationError
 from vaul.decorators import StructuredOutput, tool_call
-from tests.utils.assertion import is_equal, contains
+from tests.utils.assertion import is_equal, contains, is_true
 
 
 class TestOutput(StructuredOutput):
@@ -16,7 +16,7 @@ class TestOutput(StructuredOutput):
 
 def test_structured_output_schema():
     """Test schema generation for StructuredOutput."""
-    schema = TestOutput.tool_call_schema
+    schema = TestOutput.tool_call_schema()
     is_equal(schema["name"], "TestOutput")
     contains(schema, "description")
     contains(schema, "parameters")
@@ -77,15 +77,19 @@ def test_structured_output_auto_conversion_run():
 
 
 def test_structured_output_argument_validation():
-    """Invalid StructuredOutput args should raise ValidationError."""
-    with pytest.raises(ValidationError):
-        use_output.run({"data": {"value": "bad", "text": "bar"}})
+    """Invalid StructuredOutput args should return validation error message."""
+    result = use_output.run({"data": {"value": "bad", "text": "bar"}})
+    assert "validation error" in result.lower()
+    assert "data.value" in result
+    assert "Input should be a valid integer" in result
 
 
 def test_structured_output_argument_validation_direct():
     """Direct call should also validate StructuredOutput arguments."""
-    with pytest.raises(ValidationError):
-        use_output(data={"value": "bad", "text": "bar"})
+    result = use_output(data={"value": "bad", "text": "bar"})
+    assert "validation error" in result.lower()
+    assert "data.value" in result
+    assert "Input should be a valid integer" in result
 
 
 

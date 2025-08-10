@@ -30,7 +30,10 @@ Vaul is designed to simplify the process of creating tool calls that can be used
 
 - **Easy Tool Call Definition**: Define tool calls using simple decorators.
 - **Automatic Schema Generation**: Generate OpenAPI schemas from function signatures.
-- **Built-in Validation**: Ensure input data integrity using Pydantic validation.
+- **Comprehensive Pydantic Validation**: Ensure data integrity with context-aware validation:
+  - Function calls return user-friendly error messages
+  - LLM responses use strict validation for data integrity
+  - StructuredOutput parameters are automatically validated
 - **Seamless AI Integration**: Integrate tool calls with AI systems like OpenAI's GPT.
 - **Toolkit Management**: Organize and manage collections of tools with the Toolkit class.
 - **Documentation Generation**: Create beautiful markdown tables of your tools with `to_markdown()` to keep system prompts in sync with your toolkit.
@@ -65,8 +68,8 @@ def add_numbers(a: int, b: int) -> int:
 ### StructuredOutput Parameters
 
 When a function parameter is a custom `StructuredOutput`, dictionaries are
-automatically converted to the appropriate model when the tool runs. You can
-still use `from_dict` for manual conversions:
+automatically converted to the appropriate model when the tool runs. Vaul provides
+comprehensive Pydantic validation to ensure data integrity:
 
 ```python
 from vaul import tool_call, StructuredOutput, Toolkit
@@ -74,20 +77,41 @@ from vaul import tool_call, StructuredOutput, Toolkit
 class Address(StructuredOutput):
     street: str
     city: str
+    zip_code: str
 
 @tool_call
 def process_address(address: Address) -> str:
-    return f"{address.city}: {address.street}"
+    return f"{address.city}: {address.street} ({address.zip_code})"
 ```
 
 Dictionaries passed via `Toolkit.run_tool` or the tool's `run()` method are
-parsed automatically:
+parsed and validated automatically:
 
 ```python
 toolkit = Toolkit()
 toolkit.add(process_address)
-result = toolkit.run_tool("process_address", {"address": {"street": "Main", "city": "Paris"}})
+
+# Valid data works as expected
+result = toolkit.run_tool("process_address", {
+    "address": {"street": "Main St", "city": "Paris", "zip_code": "75001"}
+})
+
+# Invalid data returns validation error messages
+result = toolkit.run_tool("process_address", {
+    "address": {"street": "Main St"}  # Missing required fields
+})
+# Returns: "2 validation errors for process_address\naddress.city\n  Field required..."
 ```
+
+#### Validation Behavior
+
+Vaul provides different validation behaviors depending on the context:
+
+- **Function calls and `.run()` method**: Validation errors are caught and returned as informative error messages
+- **`from_response()` method**: Uses strict validation and raises `ValidationError` for invalid LLM responses
+- **`from_dict()` method**: Uses standard Pydantic validation
+
+This design ensures user-friendly error handling while maintaining strict validation for LLM responses where data integrity is critical.
 
 ### Managing Tool Calls with Toolkit
 
@@ -236,6 +260,62 @@ This approach ensures that:
 4. When you add, remove or modify tools, the system prompt updates automatically
 
 This synchronization is essential for maintaining consistency in agent behavior and preventing the confusion that happens when system prompts describe tools differently than they're actually implemented.
+
+### Validation and Error Handling
+
+Vaul provides comprehensive validation with different behaviors depending on the context to ensure both data integrity and user-friendly error handling.
+
+#### Validation Contexts
+
+**Function Calls and `.run()` Method**
+- Validation errors are caught and returned as informative error messages
+- User-friendly experience with clear error descriptions
+- No exceptions raised for validation failures
+
+```python
+@tool_call
+def process_user(user: UserProfile) -> str:
+    return f"Processed {user.name}"
+
+# Invalid data returns error message, not exception
+result = process_user.run({"user": {"name": "John"}})  # Missing required fields
+# Returns: "2 validation errors for process_user\nuser.age\n  Field required..."
+```
+
+**`from_response()` Method (LLM Responses)**
+- Uses strict validation to ensure data integrity
+- Raises `ValidationError` for invalid responses
+- Critical for maintaining trust in LLM-generated data
+
+```python
+# LLM response with missing fields raises ValidationError
+try:
+    user = UserProfile.from_response(llm_response)
+except ValidationError as e:
+    print(f"LLM response validation failed: {e}")
+```
+
+**`from_dict()` Method**
+- Uses standard Pydantic validation
+- Raises `ValidationError` for invalid data
+- Useful for manual data validation
+
+```python
+try:
+    user = UserProfile.from_dict({"name": "John", "age": 30, "email": "john@example.com"})
+except ValidationError as e:
+    print(f"Validation failed: {e}")
+```
+
+#### StructuredOutput Validation
+
+When using `StructuredOutput` as function parameters, Vaul automatically:
+- Converts dictionaries to the appropriate model
+- Validates all required fields and data types
+- Provides clear error messages for validation failures
+- Ensures type safety throughout your application
+
+For a complete demonstration of all validation behaviors, see `examples/validation_examples.py`.
 
 ### Interacting with OpenAI
 
