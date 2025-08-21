@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import inspect
+import time
+import asyncio
+import concurrent.futures
 from functools import wraps
 from typing import Any, Callable, Dict
 
@@ -133,17 +136,37 @@ class ToolCall(BaseTool):
         https://pypi.org/project/instructor/
     """
 
-    def __init__(self, func: Callable, raise_for_exception: bool = False) -> None:
+    def __init__(self, func: Callable, raise_for_exception: bool = False, retry: bool = False, timeout: float | None = None, max_backoff: float | None = None, concurrent: bool = False) -> None:
+        """
+        Initialize the ToolCall decorator.
+
+        Args:
+            func: The function to be decorated.
+            raise_for_exception: Whether to raise an exception if the function fails.
+            retry: Whether to retry the function if it fails. If True, raise_for_exception must also be True.
+            timeout: The timeout time for the function in seconds.
+            max_backoff: The maximum backoff time for the function in seconds.
+
+        Raises:
+            ValueError: If retry is True but raise_for_exception is False.
+        """
+        if retry and not raise_for_exception:
+            raise ValueError("If retry is True, raise_for_exception must also be True")
+
         super().__init__()
         self.func = func
         self.validate_func = validate_call(func)
         self.tool_call_schema = self._generate_tool_call_schema()
         self.raise_for_exception = raise_for_exception
+        self.retry = retry
+        self.concurrent = concurrent
+        if self.retry:
+            self._timeout = timeout if timeout is not None else 60.0
+            self._max_backoff = max_backoff if max_backoff is not None else 120.0
 
     def _generate_tool_call_schema(self) -> Dict[str, Any]:
         sig = inspect.signature(self.func)
 
-        schema = {}
         properties = {}
         required = []
 
@@ -164,10 +187,11 @@ class ToolCall(BaseTool):
             if param.default is inspect.Parameter.empty:
                 required.append(name)
 
-        schema["properties"] = properties
-        schema["required"] = sorted(required) if required else []
-        schema["type"] = "object"
-
+        schema = {
+            "properties": properties,
+            "required": sorted(required) if required else [],
+            "type": "object",
+        }
         schema = remove_keys_recursively(schema, "additionalProperties")
         schema = remove_keys_recursively(schema, "title")
 
@@ -220,15 +244,59 @@ class ToolCall(BaseTool):
                 raise
             return str(e)
 
+    async def run_async(self, arguments: Dict[str, Any]) -> Any:
+        if not self.retry:
+            return await self._execute_async(**arguments)
 
-def tool_call(func: Callable = None, *, raise_for_exception: bool = False) -> ToolCall:
+        start_time = time.monotonic()
+        attempt = 0
+
+        while True:
+            try:
+                return await self._execute_async(**arguments)
+            except Exception:
+                elapsed = time.monotonic() - start_time
+                if elapsed >= self._timeout:
+                    raise
+
+                backoff = min(0.1 * (2 ** attempt), self._max_backoff)
+                await asyncio.sleep(backoff)
+                attempt += 1
+
+    async def _execute_async(self, **kwargs) -> Any:
+        try:
+            if self.concurrent:
+                loop = asyncio.get_running_loop()
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    if self.retry:
+                        return await loop.run_in_executor(executor, lambda: self.func(**kwargs))
+                    else:
+                        return await loop.run_in_executor(executor, lambda: self.validate_func(**kwargs))
+
+            result = self.func(**kwargs) if self.retry else self.validate_func(**kwargs)
+            return await result if asyncio.iscoroutine(result) else result
+        except Exception as e:
+            if self.raise_for_exception:
+                raise
+            return str(e)
+
+
+def tool_call(func: Callable = None, *, raise_for_exception: bool = False, retry: bool = False, timeout: float | None = None, max_backoff: float | None = None, concurrent: bool = False) -> ToolCall:
     """
-    Function to apply the ToolCall decorator to a function, with optional raise_for_exception flag.
+    Function to apply the ToolCall decorator to a function.
+
+    Args:
+        func: Function to decorate
+        raise_for_exception: Whether to raise exceptions
+        retry: Whether to retry on failure
+        timeout: Retry timeout in seconds
+        max_backoff: Maximum retry backoff in seconds
+        concurrent: Whether to make sync functions async-compatible
     """
     if func is not None and callable(func):
-        return ToolCall(func, raise_for_exception=raise_for_exception)
+        return ToolCall(func, raise_for_exception=raise_for_exception, retry=retry, timeout=timeout, max_backoff=max_backoff, concurrent=concurrent)
 
     def wrapper(f):
-        return ToolCall(f, raise_for_exception=raise_for_exception)
+        return ToolCall(f, raise_for_exception=raise_for_exception, retry=retry, timeout=timeout, max_backoff=max_backoff, concurrent=concurrent)
 
     return wrapper

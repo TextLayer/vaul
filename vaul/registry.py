@@ -546,3 +546,10 @@ class Toolkit:
         formatted_name = f"`{name}`"
 
         return [formatted_name, description, usage]
+
+    async def run_tool_async(self, name: str, arguments: Dict[str, Any], **kwargs) -> Any:
+        tool = self.get_tool(name)
+        if tool is None:
+            raise ValueError(f"Tool '{name}' not found in registry.")
+        merged_arguments = {**arguments, **kwargs}
+        return await tool.run_async(merged_arguments)

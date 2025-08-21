@@ -1,4 +1,6 @@
 import json
+import time
+import asyncio
 from typing import Optional
 import pytest
 from pydantic import BaseModel
@@ -245,3 +247,214 @@ def test_tool_call_run_exception_handling():
 
     with pytest.raises(ValueError, match="Test error"):
         error_function_raise.run({"x": 42})
+
+
+def test_tool_call_new_parameters():
+    """Test new ToolCall decorator parameters."""
+    @tool_call(retry=True, raise_for_exception=True, timeout=30.0, max_backoff=60.0, concurrent=True)
+    def parameterized_function(x: int) -> int:
+        """Function with new parameters."""
+        return x * 2
+
+    is_equal(parameterized_function.raise_for_exception, True)
+    is_equal(parameterized_function.retry, True)
+    is_equal(parameterized_function.concurrent, True)
+    is_equal(parameterized_function._timeout, 30.0)
+    is_equal(parameterized_function._max_backoff, 60.0)
+
+
+def test_tool_call_retry_validation():
+    """Test validation of retry parameter requirements."""
+    with pytest.raises(ValueError, match="If retry is True, raise_for_exception must also be True"):
+        @tool_call(retry=True, raise_for_exception=False)
+        def invalid_retry_function(x: int) -> int:
+            return x
+
+
+def test_tool_call_default_timeout_values():
+    """Test default timeout values when retry is enabled."""
+    @tool_call(retry=True, raise_for_exception=True)
+    def retry_function(x: int) -> int:
+        """Function with retry enabled and default timeout values."""
+        return x
+
+    is_equal(retry_function._timeout, 60.0)
+    is_equal(retry_function._max_backoff, 120.0)
+
+
+@pytest.mark.asyncio
+async def test_run_async_basic():
+    """Test basic async execution."""
+    @tool_call
+    def async_test_function(x: int, y: str) -> dict:
+        """Test function for async execution."""
+        return {"result": x, "text": y}
+
+    result = await async_test_function.run_async({"x": 42, "y": "test"})
+    is_equal(result, {"result": 42, "text": "test"})
+
+
+@pytest.mark.asyncio
+async def test_run_async_with_actual_async_function():
+    """Test async execution with an actual async function."""
+    @tool_call
+    async def actual_async_function(x: int) -> int:
+        """Actual async function."""
+        await asyncio.sleep(0.01)
+        return x * 2
+
+    result = await actual_async_function.run_async({"x": 21})
+    is_equal(result, 42)
+
+
+@pytest.mark.asyncio
+async def test_run_async_concurrent_mode():
+    """Test async execution in concurrent mode."""
+    @tool_call(concurrent=True)
+    def concurrent_function(x: int) -> int:
+        """Function executed in concurrent mode."""
+        time.sleep(0.01)
+        return x * 3
+
+    result = await concurrent_function.run_async({"x": 10})
+    is_equal(result, 30)
+
+
+@pytest.mark.asyncio
+async def test_run_async_with_retry_success():
+    """Test async execution with retry on successful function."""
+    @tool_call(retry=True, raise_for_exception=True, timeout=5.0, max_backoff=1.0)
+    def retry_success_function(x: int) -> int:
+        """Function that succeeds on retry."""
+        return x * 4
+
+    result = await retry_success_function.run_async({"x": 5})
+    is_equal(result, 20)
+
+
+@pytest.mark.asyncio
+async def test_run_async_with_retry_failure():
+    """Test async execution with retry on failing function."""
+    call_count = 0
+
+    @tool_call(retry=True, raise_for_exception=True, timeout=0.5, max_backoff=0.1)
+    def retry_fail_function(x: int) -> int:
+        """Function that always fails to test retry timeout."""
+        nonlocal call_count
+        call_count += 1
+        raise ValueError("Always fails")
+
+    start_time = time.time()
+    with pytest.raises(ValueError, match="Always fails"):
+        await retry_fail_function.run_async({"x": 1})
+
+    elapsed = time.time() - start_time
+    is_true(elapsed >= 0.5)
+    is_true(call_count >= 2)
+
+
+@pytest.mark.asyncio
+async def test_run_async_with_retry_eventual_success():
+    """Test async execution with retry that eventually succeeds."""
+    attempt_count = 0
+
+    @tool_call(retry=True, raise_for_exception=True, timeout=5.0, max_backoff=0.1)
+    def retry_eventual_success(x: int) -> int:
+        """Function that succeeds after a few attempts."""
+        nonlocal attempt_count
+        attempt_count += 1
+        if attempt_count < 3:
+            raise ValueError("Temporary failure")
+        return x * attempt_count
+
+    result = await retry_eventual_success.run_async({"x": 7})
+    is_equal(result, 21)
+    is_equal(attempt_count, 3)
+
+
+@pytest.mark.asyncio
+async def test_run_async_exception_handling():
+    """Test exception handling in async execution."""
+    @tool_call
+    def async_error_function(x: int) -> int:
+        """Function that raises an error."""
+        raise ValueError("Async test error")
+
+    result = await async_error_function.run_async({"x": 42})
+    is_true(isinstance(result, str))
+    is_equal(result, "Async test error")
+
+
+@pytest.mark.asyncio
+async def test_run_async_exception_handling_with_raise():
+    """Test exception handling in async execution with raise enabled."""
+    @tool_call(raise_for_exception=True)
+    def async_error_raise_function(x: int) -> int:
+        """Function that raises an error and propagates it."""
+        raise ValueError("Async test error with raise")
+
+    with pytest.raises(ValueError, match="Async test error with raise"):
+        await async_error_raise_function.run_async({"x": 42})
+
+
+def test_concurrent_parameter_behavior():
+    """Test behavior of concurrent parameter in non-async context."""
+    @tool_call(concurrent=True)
+    def concurrent_sync_function(x: int) -> int:
+        """Sync function with concurrent flag."""
+        return x * 5
+
+    result = concurrent_sync_function.run({"x": 4})
+    is_equal(result, 20)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_with_retry():
+    """Test combination of concurrent and retry parameters."""
+    attempt_count = 0
+
+    @tool_call(retry=True, raise_for_exception=True, concurrent=True, timeout=2.0, max_backoff=0.1)
+    def concurrent_retry_function(x: int) -> int:
+        """Function with both concurrent and retry."""
+        nonlocal attempt_count
+        attempt_count += 1
+        if attempt_count < 2:
+            raise ValueError("First attempt fails")
+        time.sleep(0.01)
+        return x * 10
+
+    result = await concurrent_retry_function.run_async({"x": 3})
+    is_equal(result, 30)
+    is_equal(attempt_count, 2)
+
+
+def test_schema_generation_with_new_parameters():
+    """Test that schema generation is unaffected by new parameters."""
+    @tool_call(retry=True, raise_for_exception=True, concurrent=True, timeout=10.0)
+    def schema_test_function(a: int, b: str, c: Optional[float] = 2.0) -> dict:
+        """Function to test schema generation with new parameters."""
+        return {"a": a, "b": b, "c": c}
+
+    schema = schema_test_function.tool_call_schema
+    is_equal(schema["name"], "schema_test_function")
+    contains(schema, "parameters")
+    contains(schema["parameters"]["properties"], "a")
+    contains(schema["parameters"]["properties"], "b")
+    contains(schema["parameters"]["properties"], "c")
+    is_equal(sorted(schema["parameters"].get("required", [])), ["a", "b"])
+
+
+@pytest.mark.asyncio
+async def test_validation_in_async_mode():
+    """Test that validation still works in async mode."""
+    @tool_call
+    def validation_test_function(x: int, y: str) -> dict:
+        """Function to test validation in async mode."""
+        return {"x": x, "y": y}
+
+    result = await validation_test_function.run_async({"x": 100, "y": "valid"})
+    is_equal(result, {"x": 100, "y": "valid"})
+
+    result = await validation_test_function.run_async({"x": "invalid", "y": "valid"})
+    is_true(isinstance(result, str))
+    contains(result.lower(), "validation error")

@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 from vaul import Toolkit, tool_call
 from tests.utils.assertion import is_equal, is_true, is_not_none, contains
 
@@ -122,3 +123,175 @@ def test_run_tool_with_invalid_arguments():
     is_true(isinstance(result, str))
     contains(result.lower(), "validation error")
     contains(result.lower(), "input should be a valid integer")
+
+
+@pytest.mark.asyncio
+async def test_run_tool_async_basic():
+    """Test basic async tool execution."""
+    toolkit = Toolkit()
+    toolkit.add(add_numbers)
+
+    result = await toolkit.run_tool_async("add_numbers", {"a": 10, "b": 5})
+    is_equal(result, 15)
+
+
+@pytest.mark.asyncio
+async def test_run_tool_async_with_kwargs():
+    """Test async tool execution with additional kwargs."""
+    toolkit = Toolkit()
+    toolkit.add(add_numbers)
+
+    result = await toolkit.run_tool_async("add_numbers", {"a": 7}, b=13)
+    is_equal(result, 20)
+
+    result = await toolkit.run_tool_async("add_numbers", {"a": 1, "b": 2}, b=8)
+    is_equal(result, 9)
+
+
+@pytest.mark.asyncio
+async def test_run_tool_async_with_multiplication():
+    """Test async execution with different tool."""
+    toolkit = Toolkit()
+    toolkit.add(multiply_numbers)
+
+    result = await toolkit.run_tool_async("multiply_numbers", {"a": 6, "b": 7})
+    is_equal(result, 42)
+
+
+@pytest.mark.asyncio
+async def test_run_tool_async_nonexistent_tool():
+    """Test async execution with nonexistent tool."""
+    toolkit = Toolkit()
+
+    with pytest.raises(ValueError, match="Tool 'nonexistent' not found in registry"):
+        await toolkit.run_tool_async("nonexistent", {})
+
+
+@pytest.mark.asyncio
+async def test_run_tool_async_with_retry_tool():
+    """Test async execution with a retry-enabled tool."""
+    @tool_call(retry=True, raise_for_exception=True, timeout=1.0, max_backoff=0.1)
+    def retry_tool(x: int) -> int:
+        """Tool with retry capability."""
+        return x * 2
+
+    toolkit = Toolkit()
+    toolkit.add(retry_tool)
+
+    result = await toolkit.run_tool_async("retry_tool", {"x": 21})
+    is_equal(result, 42)
+
+
+@pytest.mark.asyncio
+async def test_run_tool_async_with_concurrent_tool():
+    """Test async execution with a concurrent-enabled tool."""
+    import time
+
+    @tool_call(concurrent=True)
+    def concurrent_tool(delay_ms: int) -> dict:
+        """Tool that simulates work with concurrent execution."""
+        time.sleep(delay_ms / 1000.0)
+        return {"processed": True, "delay": delay_ms}
+
+    toolkit = Toolkit()
+    toolkit.add(concurrent_tool)
+
+    start_time = asyncio.get_event_loop().time()
+    result = await toolkit.run_tool_async("concurrent_tool", {"delay_ms": 50})
+    elapsed = asyncio.get_event_loop().time() - start_time
+
+    is_equal(result["processed"], True)
+    is_equal(result["delay"], 50)
+    is_true(elapsed >= 0.05)
+
+
+@pytest.mark.asyncio
+async def test_run_tool_async_multiple_concurrent():
+    """Test running multiple async tools concurrently."""
+    toolkit = Toolkit()
+    toolkit.add_tools(add_numbers, multiply_numbers)
+
+    tasks = [
+        toolkit.run_tool_async("add_numbers", {"a": 1, "b": 2}),
+        toolkit.run_tool_async("multiply_numbers", {"a": 3, "b": 4}),
+        toolkit.run_tool_async("add_numbers", {"a": 5, "b": 6}),
+    ]
+
+    results = await asyncio.gather(*tasks)
+    is_equal(results, [3, 12, 11])
+
+
+@pytest.mark.asyncio
+async def test_run_tool_async_with_actual_async_tool():
+    """Test async execution with an actual async function tool."""
+    @tool_call
+    async def async_computation(x: int, y: int) -> dict:
+        """Async tool that performs computation."""
+        await asyncio.sleep(0.01)
+        return {"sum": x + y, "product": x * y}
+
+    toolkit = Toolkit()
+    toolkit.add(async_computation)
+
+    result = await toolkit.run_tool_async("async_computation", {"x": 4, "y": 5})
+    is_equal(result["sum"], 9)
+    is_equal(result["product"], 20)
+
+
+@pytest.mark.asyncio
+async def test_run_tool_async_error_handling():
+    """Test error handling in async tool execution."""
+    @tool_call
+    def error_tool(should_fail: bool) -> str:
+        """Tool that can fail on demand."""
+        if should_fail:
+            raise ValueError("Tool failed as requested")
+        return "success"
+
+    toolkit = Toolkit()
+    toolkit.add(error_tool)
+
+    result = await toolkit.run_tool_async("error_tool", {"should_fail": False})
+    is_equal(result, "success")
+
+    result = await toolkit.run_tool_async("error_tool", {"should_fail": True})
+    is_true(isinstance(result, str))
+    is_equal(result, "Tool failed as requested")
+
+
+@pytest.mark.asyncio
+async def test_run_tool_async_error_handling_with_raise():
+    """Test error handling with raise_for_exception enabled."""
+    @tool_call(raise_for_exception=True)
+    def error_raise_tool(should_fail: bool) -> str:
+        """Tool that raises exceptions."""
+        if should_fail:
+            raise ValueError("Tool failed with raise")
+        return "success"
+
+    toolkit = Toolkit()
+    toolkit.add(error_raise_tool)
+
+    result = await toolkit.run_tool_async("error_raise_tool", {"should_fail": False})
+    is_equal(result, "success")
+
+    with pytest.raises(ValueError, match="Tool failed with raise"):
+        await toolkit.run_tool_async("error_raise_tool", {"should_fail": True})
+
+
+@pytest.mark.asyncio
+async def test_run_tool_async_validation_errors():
+    """Test validation error handling in async execution."""
+    toolkit = Toolkit()
+    toolkit.add(add_numbers)
+
+    result = await toolkit.run_tool_async("add_numbers", {"a": "invalid", "b": 5})
+    is_true(isinstance(result, str))
+    contains(result.lower(), "validation error")
+
+
+def test_run_tool_async_method_exists():
+    """Test that run_tool_async method exists on Toolkit."""
+    toolkit = Toolkit()
+    is_true(hasattr(toolkit, "run_tool_async"))
+    is_true(callable(getattr(toolkit, "run_tool_async")))
