@@ -146,6 +146,7 @@ class ToolCall(BaseTool):
             retry: Whether to retry the function if it fails. If True, raise_for_exception must also be True.
             timeout: The timeout time for the function in seconds.
             max_backoff: The maximum backoff time for the function in seconds.
+            concurrent: Whether to run the function concurrently (e.g., in a thread or async context).
 
         Raises:
             ValueError: If retry is True but raise_for_exception is False.
