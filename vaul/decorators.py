@@ -273,7 +273,7 @@ class ToolCall(BaseTool):
                 loop = asyncio.get_running_loop()
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     if self.retry:
-                        return await loop.run_in_executor(executor, lambda: self.func(**kwargs))
+                        return await loop.run_in_executor(executor, lambda: self.validate_func(**kwargs))
                     else:
                         return await loop.run_in_executor(executor, lambda: self.validate_func(**kwargs))
 
