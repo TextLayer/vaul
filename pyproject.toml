@@ -5,7 +5,6 @@ build-backend = "setuptools.build_meta"
 [tool.pytest.ini_options]
 addopts = "--cov=vaul --cov-report=term-missing --cov-fail-under=85"
 testpaths = ["tests"]
-asyncio_mode = "auto"
 
 [tool.coverage.run]
 source = ["vaul"]
