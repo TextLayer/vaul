@@ -164,6 +164,9 @@ class ToolCall(BaseTool):
         if self.retry:
             self._timeout = timeout if timeout is not None else 60.0
             self._max_backoff = max_backoff if max_backoff is not None else 120.0
+        else:
+            self._timeout = None
+            self._max_backoff = None
 
     def _generate_tool_call_schema(self) -> Dict[str, Any]:
         sig = inspect.signature(self.func)
