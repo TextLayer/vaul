@@ -136,17 +136,17 @@ class ToolCall(BaseTool):
         https://pypi.org/project/instructor/
     """
 
-    def __init__(self, func: Callable, raise_for_exception: bool = False, retry: bool = False, timeout: float | None = None, max_backoff: float | None = None, concurrent: bool = False) -> None:
+    def __init__(self, func: Callable, raise_for_exception: bool = False, retry: bool = False, max_timeout: Optional[int] = None, max_backoff: Optional[int] = None, concurrent: bool = False) -> None:
         """
         Initialize the ToolCall decorator.
 
         Args:
-            func: The function to be decorated.
-            raise_for_exception: Whether to raise an exception if the function fails.
-            retry: Whether to retry the function if it fails. If True, raise_for_exception must also be True.
-            timeout: The timeout time for the function in seconds.
-            max_backoff: The maximum backoff time for the function in seconds.
-            concurrent: Whether to run the function concurrently (e.g., in a thread or async context).
+            func: The function to be decorated
+            raise_for_exception: Raises an exception when a tool call fails, required if retry is set to True
+            retry: Whether to retry a tool call execution upon failure. If set to True, raise_for_exception must also be True
+            max_timeout: Maximum tool call retry timeout in seconds
+            max_backoff: Maximum time to run exponential backoff on tool call failure in seconds
+            concurrent: Whether to execute this tool call concurrently (e.g. in a thread or async context)
 
         Raises:
             ValueError: If retry is True but raise_for_exception is False.
