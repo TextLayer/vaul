@@ -152,6 +152,113 @@ print(markdown_table)
 # | `add_numbers` | Adds two numbers together. | When you need to calculate the sum of two numbers. |
 # | `multiply_numbers` | Multiplies two numbers together. | When you need to calculate the product of two numbers. |
 # | `subtract_numbers` | Subtracts the second number from the first. | When you need to calculate the difference between two numbers. |
+
+```
+
+### Async Tool Execution
+
+Vaul supports asynchronous execution of tools for better performance and concurrency:
+
+```python
+import asyncio
+from vaul import Toolkit, tool_call
+
+# Create a toolkit
+toolkit = Toolkit()
+
+@tool_call
+def async_computation(x: int, y: int) -> dict:
+    """Perform async computation."""
+    return {"sum": x + y, "product": x * y}
+
+@tool_call(concurrent=True)
+def concurrent_operation(delay_ms: int) -> dict:
+    """Operation that can run concurrently."""
+    import time
+    time.sleep(delay_ms / 1000.0)
+    return {"processed": True, "delay": delay_ms}
+
+toolkit.add_tools(async_computation, concurrent_operation)
+
+# Run tools asynchronously
+async def main():
+    # Single async execution
+    result = await toolkit.async_run_tool("async_computation", {"x": 4, "y": 5})
+    print(result)  # Output: {'sum': 9, 'product': 20}
+
+    # Multiple concurrent executions
+    tasks = [
+        toolkit.async_run_tool("concurrent_operation", {"delay_ms": 100}),
+        toolkit.async_run_tool("concurrent_operation", {"delay_ms": 200}),
+        toolkit.async_run_tool("async_computation", {"x": 1, "b": 2}),
+    ]
+
+    results = await asyncio.gather(*tasks)
+    print(results)
+
+# Run the async function
+asyncio.run(main())
+```
+
+You can also run individual tools asynchronously:
+
+```python
+@tool_call
+def my_tool(x: int) -> int:
+    """My async tool."""
+    return x * 2
+
+# Run the tool asynchronously
+result = await my_tool.async_run({"x": 21})
+print(result)  # Output: 42
+```
+
+### Retry and Error Handling
+
+Vaul provides robust retry mechanisms with exponential backoff for handling transient failures:
+
+```python
+from vaul import tool_call
+
+# If you want retries with your tool, you must also set `raise_for_exception=True`
+@tool_call(retry=True, raise_for_exception=True, max_timeout=30.0, max_backoff=10.0)
+def unreliable_api_call(user_id: str) -> dict:
+    """Call an external API that might fail temporarily."""
+    # This function will be retried up to max_timeout seconds
+    # with exponential backoff up to max_backoff seconds
+    response = make_api_request(user_id)
+    if response.status_code >= 500:
+        raise ConnectionError("Server error, will retry")
+    return response.json()
+
+# The tool will automatically retry on failures
+result = unreliable_api_call.run({"user_id": "123"})
+```
+
+**Retry Parameters:**
+
+- `retry`: Enable retry functionality (requires `raise_for_exception=True`)
+- `max_timeout`: Maximum total time to retry in seconds (default: 60.0)
+- `max_backoff`: Maximum backoff delay between retries in seconds (default: 120.0)
+
+**Retry Behavior:**
+
+```python
+@tool_call(retry=True, raise_for_exception=True, max_timeout=5.0, max_backoff=1.0)
+def retry_example(x: int) -> int:
+    """Example showing retry behavior."""
+    if x < 3:
+        raise ValueError("Value too low, retrying...")
+    return x * 2
+
+# This will retry with exponential backoff:
+# Attempt 1: immediate
+# Attempt 2: after ~0.1s delay
+# Attempt 3: after ~0.2s delay
+# Attempt 4: after ~0.4s delay
+# Attempt 5: after ~0.8s delay
+# Then stop (max_backoff reached)
+result = retry_example.run({"x": 1})
 ```
 
 ### Tool Documentation Format
@@ -299,7 +406,7 @@ print(add_numbers.from_response(response))
 
 Let's take a look at how you might handle a more complex application, such as one that integrates multiple potential tool calls:
 
-```python
+````python
 import os
 
 from jira import JIRA
@@ -525,7 +632,7 @@ print(toolkit.tool_names)  # Lists all imported API operations
 
 # Use the tools as normal
 result = toolkit.run_tool("getUserById", {"userId": "123"})
-```
+````
 
 #### OpenAPI with Authentication
 
@@ -614,6 +721,7 @@ result = toolkit.run_tool("search_documents", {"query": "python tutorials"})
 Vaul supports two types of MCP server connections:
 
 1. **HTTP/SSE Servers**: Connect to MCP servers running as HTTP endpoints
+
    ```python
    toolkit.add_mcp("http://localhost:3000/sse")
    ```
