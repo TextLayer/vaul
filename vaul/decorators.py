@@ -3,9 +3,9 @@ from __future__ import annotations
 import inspect
 import time
 import asyncio
-import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from pydantic import TypeAdapter, ValidationError, validate_call
 
@@ -151,10 +151,11 @@ class ToolCall(BaseTool):
         Raises:
             ValueError: If retry is True but raise_for_exception is False.
         """
+        super().__init__()
+
         if retry and not raise_for_exception:
             raise ValueError("If retry is True, raise_for_exception must also be True")
 
-        super().__init__()
         self.func = func
         self.validate_func = validate_call(func)
         self.tool_call_schema = self._generate_tool_call_schema()
@@ -162,10 +163,10 @@ class ToolCall(BaseTool):
         self.retry = retry
         self.concurrent = concurrent
         if self.retry:
-            self._timeout = timeout if timeout is not None else 60.0
-            self._max_backoff = max_backoff if max_backoff is not None else 120.0
+            self._max_timeout = max_timeout if max_timeout is not None else 60
+            self._max_backoff = max_backoff if max_backoff is not None else 120
         else:
-            self._timeout = None
+            self._max_timeout = None
             self._max_backoff = None
 
     def _generate_tool_call_schema(self) -> Dict[str, Any]:
@@ -248,36 +249,32 @@ class ToolCall(BaseTool):
                 raise
             return str(e)
 
-    async def run_async(self, arguments: Dict[str, Any]) -> Any:
+    async def async_run(self, arguments: Dict[str, Any]) -> Any:
         if not self.retry:
-            return await self._execute_async(**arguments)
+            return await self._async_execute(**arguments)
 
         start_time = time.monotonic()
         attempt = 0
 
         while True:
             try:
-                return await self._execute_async(**arguments)
+                return await self._async_execute(**arguments)
             except Exception:
                 elapsed = time.monotonic() - start_time
-                if elapsed >= self._timeout:
+                if elapsed >= self._max_timeout:
                     raise
 
                 backoff = min(0.1 * (2 ** attempt), self._max_backoff)
                 await asyncio.sleep(backoff)
                 attempt += 1
 
-    async def _execute_async(self, **kwargs) -> Any:
+    async def _async_execute(self, **kwargs) -> Any:
         try:
             if self.concurrent:
                 loop = asyncio.get_running_loop()
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    if self.retry:
-                        return await loop.run_in_executor(executor, lambda: self.validate_func(**kwargs))
-                    else:
-                        return await loop.run_in_executor(executor, lambda: self.validate_func(**kwargs))
-
-            result = self.func(**kwargs) if self.retry else self.validate_func(**kwargs)
+                with ThreadPoolExecutor() as executor:
+                    return await loop.run_in_executor(executor, lambda: self.validate_func(**kwargs))
+            result = self.validate_func(**kwargs)
             return await result if asyncio.iscoroutine(result) else result
         except Exception as e:
             if self.raise_for_exception:
@@ -285,22 +282,22 @@ class ToolCall(BaseTool):
             return str(e)
 
 
-def tool_call(func: Callable = None, *, raise_for_exception: bool = False, retry: bool = False, timeout: float | None = None, max_backoff: float | None = None, concurrent: bool = False) -> ToolCall:
+def tool_call(func: Callable = None, *, raise_for_exception: bool = False, retry: bool = False, max_timeout: Optional[int] = None, max_backoff: Optional[int] = None, concurrent: bool = False) -> ToolCall:
     """
     Function to apply the ToolCall decorator to a function.
 
     Args:
-        func: Function to decorate
-        raise_for_exception: Whether to raise exceptions
-        retry: Whether to retry on failure
-        timeout: Retry timeout in seconds
-        max_backoff: Maximum retry backoff in seconds
-        concurrent: Whether to make sync functions async-compatible
+        func: The function to be decorated
+        raise_for_exception: Whether to raise an exception when a tool call fails, required if retry is set to True
+        retry: Whether to retry a tool call execution upon failure. If set to True, raise_for_exception must also be True
+        max_timeout: Maximum tool call retry timeout in seconds
+        max_backoff: Maximum time to run exponential backoff on tool call failure in seconds
+        concurrent: Whether to execute this tool call concurrently (e.g. in a thread or async context)
     """
     if func is not None and callable(func):
-        return ToolCall(func, raise_for_exception=raise_for_exception, retry=retry, timeout=timeout, max_backoff=max_backoff, concurrent=concurrent)
+        return ToolCall(func, raise_for_exception=raise_for_exception, retry=retry, max_timeout=max_timeout, max_backoff=max_backoff, concurrent=concurrent)
 
     def wrapper(f):
-        return ToolCall(f, raise_for_exception=raise_for_exception, retry=retry, timeout=timeout, max_backoff=max_backoff, concurrent=concurrent)
+        return ToolCall(f, raise_for_exception=raise_for_exception, retry=retry, max_timeout=max_timeout, max_backoff=max_backoff, concurrent=concurrent)
 
     return wrapper

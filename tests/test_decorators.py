@@ -290,7 +290,7 @@ async def test_run_async_basic():
         """Test function for async execution."""
         return {"result": x, "text": y}
 
-    result = await async_test_function.run_async({"x": 42, "y": "test"})
+    result = await async_test_function.async_run({"x": 42, "y": "test"})
     is_equal(result, {"result": 42, "text": "test"})
 
 
@@ -303,7 +303,7 @@ async def test_run_async_with_actual_async_function():
         await asyncio.sleep(0.01)
         return x * 2
 
-    result = await actual_async_function.run_async({"x": 21})
+    result = await actual_async_function.async_run({"x": 21})
     is_equal(result, 42)
 
 
@@ -380,7 +380,7 @@ async def test_run_async_exception_handling():
         """Function that raises an error."""
         raise ValueError("Async test error")
 
-    result = await async_error_function.run_async({"x": 42})
+    result = await async_error_function.async_run({"x": 42})
     is_true(isinstance(result, str))
     is_equal(result, "Async test error")
 
@@ -452,9 +452,9 @@ async def test_validation_in_async_mode():
         """Function to test validation in async mode."""
         return {"x": x, "y": y}
 
-    result = await validation_test_function.run_async({"x": 100, "y": "valid"})
+    result = await validation_test_function.async_run({"x": 100, "y": "valid"})
     is_equal(result, {"x": 100, "y": "valid"})
 
-    result = await validation_test_function.run_async({"x": "invalid", "y": "valid"})
+    result = await validation_test_function.async_run({"x": "invalid", "y": "valid"})
     is_true(isinstance(result, str))
     contains(result.lower(), "validation error")

@@ -547,9 +547,40 @@ class Toolkit:
 
         return [formatted_name, description, usage]
 
-    async def run_tool_async(self, name: str, arguments: Dict[str, Any], **kwargs) -> Any:
+    async def async_run_tool(self, name: str, arguments: Dict[str, Any], **kwargs) -> Any:
+        """
+        Asynchronously execute the tool corresponding to the given name with the provided arguments.
+
+        Args:
+            name (str): The name of the tool to run
+            arguments (Dict[str, Any]): Arguments to pass to the tool
+            **kwargs: Additional keyword arguments to pass to the tool
+
+        Raises:
+            ValueError: If the tool is not found in the registry
+
+        Returns:
+            Any: The result of running the tool
+
+        Example:
+            ```python
+            toolkit = Toolkit()
+
+            @tool_call(concurrent=True)
+            def add_numbers(a: int, b: int) -> int:
+                return a + b
+
+            toolkit.add(add_numbers)
+
+            result = toolkit.async_run_tool("add_numbers", {"a": 5, "b": 3})
+            print(result)  # Output: 8
+            ```
+        """
         tool = self.get_tool(name)
+
         if tool is None:
             raise ValueError(f"Tool '{name}' not found in registry.")
+
         merged_arguments = {**arguments, **kwargs}
-        return await tool.run_async(merged_arguments)
+
+        return await tool.async_run(merged_arguments)
