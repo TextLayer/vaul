@@ -170,7 +170,7 @@ async def test_run_tool_async_nonexistent_tool():
 @pytest.mark.asyncio
 async def test_run_tool_async_with_retry_tool():
     """Test async execution with a retry-enabled tool."""
-    @tool_call(retry=True, raise_for_exception=True, timeout=1.0, max_backoff=0.1)
+    @tool_call(retry=True, raise_for_exception=True, max_timeout=1.0, max_backoff=0.1)
     def retry_tool(x: int) -> int:
         """Tool with retry capability."""
         return x * 2

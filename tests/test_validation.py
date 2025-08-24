@@ -35,7 +35,7 @@ def test_validate_tool_call_no_throw():
 
 def test_schema_generation_consistency():
     """Test that schema generation is consistent with new decorator parameters."""
-    @tool_call(retry=True, raise_for_exception=True, concurrent=True, timeout=30.0, max_backoff=60.0)
+    @tool_call(retry=True, raise_for_exception=True, concurrent=True, max_timeout=30.0, max_backoff=60.0)
     def complex_function(x: int, y: str, z: float = 1.0) -> dict:
         """Complex function with all new parameters."""
         return {"x": x, "y": y, "z": z}
@@ -120,7 +120,7 @@ def test_complex_type_validation_preserved():
 
 def test_edge_case_parameter_handling():
     """Test edge cases in parameter handling with new features."""
-    @tool_call(timeout=1.0, max_backoff=2.0, concurrent=True)
+    @tool_call(max_timeout=1.0, max_backoff=2.0, concurrent=True)
     def edge_case_function(value: str = "") -> str:
         """Function with edge case parameters."""
         return value or "default"
@@ -137,16 +137,16 @@ def test_edge_case_parameter_handling():
 
 def test_timeout_parameter_validation():
     """Test validation of timeout and max_backoff parameters."""
-    @tool_call(retry=True, raise_for_exception=True, timeout=5.0, max_backoff=10.0)
+    @tool_call(retry=True, raise_for_exception=True, max_timeout=5.0, max_backoff=10.0)
     def valid_timeout_function(x: int) -> int:
         return x
 
-    is_equal(valid_timeout_function._timeout, 5.0)
+    is_equal(valid_timeout_function._max_timeout, 5.0)
     is_equal(valid_timeout_function._max_backoff, 10.0)
 
     @tool_call(retry=True, raise_for_exception=True)
     def default_timeout_function(x: int) -> int:
         return x
 
-    is_equal(default_timeout_function._timeout, 60.0)
+    is_equal(default_timeout_function._max_timeout, 60.0)
     is_equal(default_timeout_function._max_backoff, 120.0)
