@@ -293,5 +293,5 @@ async def test_run_tool_async_validation_errors():
 def test_run_tool_async_method_exists():
     """Test that run_tool_async method exists on Toolkit."""
     toolkit = Toolkit()
-    is_true(hasattr(toolkit, "run_tool_async"))
-    is_true(callable(getattr(toolkit, "run_tool_async")))
+    is_true(hasattr(toolkit, "async_run_tool"))
+    is_true(callable(getattr(toolkit, "async_run_tool")))
