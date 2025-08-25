@@ -251,7 +251,7 @@ def test_tool_call_run_exception_handling():
 
 def test_tool_call_new_parameters():
     """Test new ToolCall decorator parameters."""
-    @tool_call(retry=True, raise_for_exception=True, max_timeout=30.0, max_backoff=60.0, concurrent=True)
+    @tool_call(retry=True, raise_for_exception=True, max_timeout=30, max_backoff=60, concurrent=True)
     def parameterized_function(x: int) -> int:
         """Function with new parameters."""
         return x * 2
@@ -259,8 +259,8 @@ def test_tool_call_new_parameters():
     is_equal(parameterized_function.raise_for_exception, True)
     is_equal(parameterized_function.retry, True)
     is_equal(parameterized_function.concurrent, True)
-    is_equal(parameterized_function._max_timeout, 30.0)
-    is_equal(parameterized_function._max_backoff, 60.0)
+    is_equal(parameterized_function._max_timeout, 30)
+    is_equal(parameterized_function._max_backoff, 60)
 
 
 def test_tool_call_retry_validation():
@@ -278,8 +278,8 @@ def test_tool_call_default_timeout_values():
         """Function with retry enabled and default timeout values."""
         return x
 
-    is_equal(retry_function._max_timeout, 60.0)
-    is_equal(retry_function._max_backoff, 120.0)
+    is_equal(retry_function._max_timeout, 60)
+    is_equal(retry_function._max_backoff, 120)
 
 
 @pytest.mark.asyncio
@@ -430,8 +430,8 @@ async def test_concurrent_with_retry():
 
 def test_schema_generation_with_new_parameters():
     """Test that schema generation is unaffected by new parameters."""
-    @tool_call(retry=True, raise_for_exception=True, concurrent=True, max_timeout=10.0)
-    def schema_test_function(a: int, b: str, c: Optional[float] = 2.0) -> dict:
+    @tool_call(retry=True, raise_for_exception=True, concurrent=True, max_timeout=10)
+    def schema_test_function(a: int, b: str, c: Optional[float] = 2) -> dict:
         """Function to test schema generation with new parameters."""
         return {"a": a, "b": b, "c": c}
 
