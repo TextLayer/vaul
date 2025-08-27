@@ -221,7 +221,7 @@ Vaul provides robust retry mechanisms with exponential backoff for handling tran
 from vaul import tool_call
 
 # If you want retries with your tool, you must also set `raise_for_exception=True`
-@tool_call(retry=True, raise_for_exception=True, max_timeout=30.0, max_backoff=10.0)
+@tool_call(retry=True, raise_for_exception=True, max_timeout=30, max_backoff=10)
 def unreliable_api_call(user_id: str) -> dict:
     """Call an external API that might fail temporarily."""
     # This function will be retried up to max_timeout seconds
@@ -238,13 +238,13 @@ result = unreliable_api_call.run({"user_id": "123"})
 **Retry Parameters:**
 
 - `retry`: Enable retry functionality (requires `raise_for_exception=True`)
-- `max_timeout`: Maximum total time to retry in seconds (default: 60.0)
-- `max_backoff`: Maximum backoff delay between retries in seconds (default: 120.0)
+- `max_timeout`: Maximum total time to retry in seconds (default: 60)
+- `max_backoff`: Maximum backoff delay between retries in seconds (default: 120)
 
 **Retry Behavior:**
 
 ```python
-@tool_call(retry=True, raise_for_exception=True, max_timeout=5.0, max_backoff=1.0)
+@tool_call(retry=True, raise_for_exception=True, max_timeout=5, max_backoff=1)
 def retry_example(x: int) -> int:
     """Example showing retry behavior."""
     if x < 3:
@@ -253,12 +253,14 @@ def retry_example(x: int) -> int:
 
 # This will retry with exponential backoff:
 # Attempt 1: immediate
-# Attempt 2: after ~0.1s delay
-# Attempt 3: after ~0.2s delay
-# Attempt 4: after ~0.4s delay
-# Attempt 5: after ~0.8s delay
-# Then stop (max_backoff reached)
-result = retry_example.run({"x": 1})
+# Attempt 2: after 0.1s delay
+# Attempt 3: after 0.2s delay
+# Attempt 4: after 0.4s delay
+# Attempt 5: after 0.8s delay
+# Attempt 6+: after 1s delay (capped by max_backoff)
+# Stops after 5 seconds total (max_timeout)
+import asyncio
+result = asyncio.run(retry_example.async_run({"x": 1}))
 ```
 
 ### Tool Documentation Format
