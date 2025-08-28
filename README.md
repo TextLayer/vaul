@@ -259,6 +259,11 @@ def retry_example(x: int) -> int:
 # Attempt 5: after 0.8s delay
 # Attempt 6+: after 1s delay (capped by max_backoff)
 # Stops after 5 seconds total (max_timeout)
+
+# Synchronous execution with retry:
+result = retry_example.run({"x": 1})
+
+# Or async execution with retry:
 import asyncio
 result = asyncio.run(retry_example.async_run({"x": 1}))
 ```

@@ -240,14 +240,30 @@ class ToolCall(BaseTool):
         )
 
     def run(self, arguments: Dict[str, Any]) -> Any:
-        try:
-            # Use the validated wrapper to automatically parse and validate
-            # arguments just like direct function calls
-            return self.validate_func(**arguments)
-        except Exception as e:
-            if self.raise_for_exception:
-                raise
-            return str(e)
+        if not self.retry:
+            try:
+                return self.validate_func(**arguments)
+            except Exception as e:
+                if self.raise_for_exception:
+                    raise
+                return str(e)
+
+        start_time = time.monotonic()
+        attempt = 0
+
+        while True:
+            try:
+                return self.validate_func(**arguments)
+            except Exception as e:
+                elapsed = time.monotonic() - start_time
+                if elapsed >= self._max_timeout:
+                    if self.raise_for_exception:
+                        raise
+                    return str(e)
+
+                backoff = min(0.1 * (2 ** attempt), self._max_backoff)
+                time.sleep(backoff)
+                attempt += 1
 
     async def async_run(self, arguments: Dict[str, Any]) -> Any:
         if not self.retry:

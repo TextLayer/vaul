@@ -182,6 +182,32 @@ async def test_run_tool_async_with_retry_tool():
     is_equal(result, 42)
 
 
+def test_run_tool_sync_with_retry_tool():
+    """Test synchronous execution with a retry-enabled tool via toolkit."""
+    attempt_count = 0
+
+    @tool_call(retry=True, raise_for_exception=True, max_timeout=2.0, max_backoff=0.2)
+    def sync_retry_tool(x: int) -> int:
+        """Tool with retry capability for sync execution."""
+        nonlocal attempt_count
+        attempt_count += 1
+        if attempt_count < 3:
+            raise ValueError("Temporary failure")
+        return x * attempt_count
+
+    toolkit = Toolkit()
+    toolkit.add(sync_retry_tool)
+
+    import time
+    start_time = time.time()
+    result = toolkit.run_tool("sync_retry_tool", {"x": 7})
+    elapsed = time.time() - start_time
+
+    is_equal(result, 21)
+    is_equal(attempt_count, 3)
+    is_true(elapsed >= 0.3)
+
+
 @pytest.mark.asyncio
 async def test_run_tool_async_with_concurrent_tool():
     """Test async execution with a concurrent-enabled tool."""
