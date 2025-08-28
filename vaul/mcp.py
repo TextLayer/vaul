@@ -188,8 +188,8 @@ def tools_from_mcp_url(
                     """Create a tool that reconnects for each call over SSE."""
                     def create_async_call(name: str):
                         async def call(**kwargs):
-                            async with sse_client(url, headers=headers) as (read, write):
-                                async with ClientSession(read, write) as session:
+                            async with sse_client(url, headers=headers) as (_read, _write):
+                                async with ClientSession(_read, _write) as session:
                                     await session.initialize()
                                     result = await session.call_tool(name=name, arguments=kwargs)
                                     return _extract_result_content(result)
