@@ -413,7 +413,7 @@ print(add_numbers.from_response(response))
 
 Let's take a look at how you might handle a more complex application, such as one that integrates multiple potential tool calls:
 
-````python
+```python
 import os
 
 from jira import JIRA
@@ -639,7 +639,7 @@ print(toolkit.tool_names)  # Lists all imported API operations
 
 # Use the tools as normal
 result = toolkit.run_tool("getUserById", {"userId": "123"})
-````
+```
 
 #### OpenAPI with Authentication
 
