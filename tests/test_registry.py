@@ -186,7 +186,7 @@ def test_run_tool_sync_with_retry_tool():
     """Test synchronous execution with a retry-enabled tool via toolkit."""
     attempt_count = 0
 
-    @tool_call(retry=True, raise_for_exception=True, max_timeout=2.0, max_backoff=0.2)
+    @tool_call(retry=True, raise_for_exception=True, max_timeout=2, max_backoff=0.2)
     def sync_retry_tool(x: int) -> int:
         """Tool with retry capability for sync execution."""
         nonlocal attempt_count
