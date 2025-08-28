@@ -167,20 +167,20 @@ def tools_from_mcp(session: ClientSession) -> List[ToolCall]:
 
 def tools_from_mcp_url(
     url: str,
-    headers: Optional[Dict[str, str]] = None
+    headers: Dict[str, str] = {}
 ) -> List[ToolCall]:
     """
     Load tools from an MCP server URL (SSE endpoint).
     
     Args:
         url: The SSE endpoint URL
-        headers: Optional HTTP headers
+        headers: HTTP headers
         
     Returns:
         List of ToolCall objects that can be added to a Toolkit
     """
     async def load():
-        async with sse_client(url, headers=headers or {}) as (read, write):
+        async with sse_client(url, headers=headers) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 
