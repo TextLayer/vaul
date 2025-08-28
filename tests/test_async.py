@@ -34,7 +34,6 @@ async def async_no_concurrent_tool(duration: float) -> dict:
 
 
 class TestAsyncExecution(BaseTest):
-    """Test async execution with concurrent parameter."""
 
     async def test_concurrent_sync_functions_parallel_execution(self):
         """Test that concurrent=True allows sync functions to run in parallel."""
