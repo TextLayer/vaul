@@ -27,7 +27,6 @@ async def async_no_concurrent_tool(duration: float) -> dict:
 
 
 class TestAsyncExecution(BaseTest):
-
     async def test_concurrent_sync_functions_parallel_execution(self):
         """Test that concurrent=True allows sync functions to run in parallel."""
         sleep_duration = 0.2
@@ -86,30 +85,25 @@ class TestAsyncExecution(BaseTest):
 
     async def test_non_concurrent_async_functions_sequential_execution(self):
         """Test that concurrent=False works correctly with async functions."""
-        sleep_duration = 0.1
-        num_tasks = 3
+        execution_order = []
 
-        start_time = time.time()
+        @tool_call(concurrent=False)
+        async def ordered_async_tool(task_id: int) -> dict:
+            execution_order.append(f"start_{task_id}")
+            await asyncio.sleep(0.05)
+            execution_order.append(f"end_{task_id}")
+            return {"task_id": task_id, "type": "async_no_concurrent"}
 
-        tasks = [
-            async_no_concurrent_tool.async_run({"duration": sleep_duration})
-            for _ in range(num_tasks)
-        ]
+        tasks = [ordered_async_tool.async_run({"task_id": i}) for i in range(3)]
 
         results = await asyncio.gather(*tasks)
 
-        end_time = time.time()
-        total_time = end_time - start_time
-
-        assert len(results) == num_tasks
-        assert all(result["slept"] == sleep_duration for result in results)
+        assert len(results) == 3
         assert all(result["type"] == "async_no_concurrent" for result in results)
 
-        assert total_time < sleep_duration * 2, (
-            f"Expected < {sleep_duration * 2}s, got {total_time}s"
-        )
-        assert total_time >= sleep_duration, (
-            f"Expected >= {sleep_duration}s, got {total_time}s"
+        expected_order = ["start_0", "start_1", "start_2", "end_0", "end_1", "end_2"]
+        assert execution_order == expected_order, (
+            f"Expected execution order {expected_order}, got {execution_order}"
         )
 
     async def test_mixed_concurrent_and_non_concurrent_execution(self):
@@ -205,18 +199,19 @@ class TestAsyncExecution(BaseTest):
             assert "Intentional error" in str(failure)
 
     async def test_concurrent_resource_sharing(self):
-        """Test that concurrent execution properly handles shared resources."""
+        """Test that concurrent execution properly handles shared resources with synchronization."""
         shared_counter = {"value": 0}
+        lock = asyncio.Lock()
 
         @tool_call(concurrent=True)
-        def increment_counter(increment: int) -> dict:
-            time.sleep(0.05)
-            old_value = shared_counter["value"]
-            time.sleep(0.01)
-            shared_counter["value"] = old_value + increment
-            return {"old_value": old_value, "new_value": shared_counter["value"]}
+        async def increment_counter_safe(increment: int) -> dict:
+            async with lock:
+                old_value = shared_counter["value"]
+                await asyncio.sleep(0.01)
+                shared_counter["value"] = old_value + increment
+                return {"old_value": old_value, "new_value": shared_counter["value"]}
 
-        tasks = [increment_counter.async_run({"increment": 1}) for _ in range(5)]
+        tasks = [increment_counter_safe.async_run({"increment": 1}) for _ in range(5)]
 
         start_time = time.time()
         results = await asyncio.gather(*tasks)
@@ -228,4 +223,11 @@ class TestAsyncExecution(BaseTest):
         )
 
         assert len(results) == 5
-        assert shared_counter["value"] > 0
+        assert (
+            shared_counter["value"] == 5
+        ) 
+        old_values = [result["old_value"] for result in results]
+        new_values = [result["new_value"] for result in results]
+
+        assert sorted(old_values) == [0, 1, 2, 3, 4]
+        assert sorted(new_values) == [1, 2, 3, 4, 5]
