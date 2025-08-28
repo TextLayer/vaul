@@ -225,7 +225,7 @@ class TestAsyncExecution(BaseTest):
         assert len(results) == 5
         assert (
             shared_counter["value"] == 5
-        ) 
+        )
         old_values = [result["old_value"] for result in results]
         new_values = [result["new_value"] for result in results]
 
