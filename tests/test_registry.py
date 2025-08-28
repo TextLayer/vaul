@@ -149,7 +149,7 @@ async def async_concurrent_tool(duration: float) -> dict:
     return {"slept": duration, "async": True, "concurrent": True}
 
 
-@tool_call(retry=True, raise_for_exception=True, max_timeout=2, max_backoff=0.5)
+@tool_call(retry=True, raise_for_exception=True, max_timeout=2, max_backoff=1)
 async def flaky_async_tool(should_fail: bool) -> dict:
     """Tool that can fail for retry testing."""
     if should_fail:

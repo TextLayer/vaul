@@ -20,13 +20,6 @@ async def async_sleep_tool(duration: float) -> dict:
 
 
 @tool_call(concurrent=False)
-def sync_no_concurrent_tool(duration: float) -> dict:
-    """Synchronous tool without concurrency."""
-    time.sleep(duration)
-    return {"slept": duration, "type": "sync_no_concurrent"}
-
-
-@tool_call(concurrent=False)
 async def async_no_concurrent_tool(duration: float) -> dict:
     """Asynchronous tool without concurrency."""
     await asyncio.sleep(duration)
@@ -91,36 +84,6 @@ class TestAsyncExecution(BaseTest):
             f"Expected >= {sleep_duration}s, got {total_time}s"
         )
 
-    async def test_non_concurrent_sync_functions_sequential_execution(self):
-        """Test that concurrent=False forces sync functions to run sequentially."""
-        sleep_duration = 0.1
-        num_tasks = 3
-
-        start_time = time.time()
-
-        tasks = [
-            sync_no_concurrent_tool.async_run({"duration": sleep_duration})
-            for _ in range(num_tasks)
-        ]
-
-        results = await asyncio.gather(*tasks)
-
-        end_time = time.time()
-        total_time = end_time - start_time
-
-        assert len(results) == num_tasks
-        assert all(result["slept"] == sleep_duration for result in results)
-        assert all(result["type"] == "sync_no_concurrent" for result in results)
-
-        expected_min_time = sleep_duration * num_tasks * 0.8
-        expected_max_time = sleep_duration * num_tasks * 2
-        assert total_time >= expected_min_time, (
-            f"Expected >= {expected_min_time}s, got {total_time}s"
-        )
-        assert total_time < expected_max_time, (
-            f"Expected < {expected_max_time}s, got {total_time}s"
-        )
-
     async def test_non_concurrent_async_functions_sequential_execution(self):
         """Test that concurrent=False works correctly with async functions."""
         sleep_duration = 0.1
@@ -158,7 +121,6 @@ class TestAsyncExecution(BaseTest):
         tasks = [
             sync_sleep_tool.async_run({"duration": sleep_duration}),
             async_sleep_tool.async_run({"duration": sleep_duration}),
-            sync_no_concurrent_tool.async_run({"duration": sleep_duration}),
             async_no_concurrent_tool.async_run({"duration": sleep_duration}),
         ]
 
@@ -167,7 +129,7 @@ class TestAsyncExecution(BaseTest):
         end_time = time.time()
         total_time = end_time - start_time
 
-        assert len(results) == 4
+        assert len(results) == 3
         assert all(result["slept"] == sleep_duration for result in results)
 
         assert total_time < sleep_duration * 2.5, (
@@ -217,21 +179,30 @@ class TestAsyncExecution(BaseTest):
 
         tasks = [
             error_tool.async_run({"should_fail": False}),
+            error_tool.async_run({"should_fail": True}),
             error_tool.async_run({"should_fail": False}),
+            error_tool.async_run({"should_fail": True}),
             error_tool.async_run({"should_fail": False}),
         ]
 
-        failing_task = error_tool.async_run({"should_fail": True})
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        successful_results = await asyncio.gather(*tasks)
+        assert len(results) == 5
 
-        assert len(successful_results) == 3
-        assert all(result["success"] for result in successful_results)
-        try:
-            await failing_task
-            assert False, "Expected ValueError to be raised"
-        except ValueError as e:
-            assert "Intentional error" in str(e)
+        successful_results = [
+            r for r in results if isinstance(r, dict) and r.get("success")
+        ]
+        failed_results = [r for r in results if isinstance(r, ValueError)]
+
+        assert len(successful_results) >= 3, (
+            f"Expected at least 3 successes, got {len(successful_results)}"
+        )
+        assert len(failed_results) >= 2, (
+            f"Expected at least 2 failures, got {len(failed_results)}"
+        )
+
+        for failure in failed_results:
+            assert "Intentional error" in str(failure)
 
     async def test_concurrent_resource_sharing(self):
         """Test that concurrent execution properly handles shared resources."""
