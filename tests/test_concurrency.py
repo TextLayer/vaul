@@ -387,3 +387,194 @@ class TestConcurrencyAndThreadSafety(BaseTest):
 
         thread_ids = {result["thread_id"] for result in all_results}
         assert len(thread_ids) > 1, "Should use multiple threads"
+
+
+# Import additional modules for concurrent tests
+import asyncio
+import pytest
+from tests.utils.assertion import is_equal, is_true, is_false
+
+
+def test_concurrent_parameter_behavior():
+    """Test concurrent parameter behavior in sync context."""
+    @tool_call(concurrent=True)
+    def concurrent_sync_function(x: int) -> int:
+        """Sync function with concurrent execution."""
+        time.sleep(0.01)
+        return x * 5
+
+    result = concurrent_sync_function.run({"x": 4})
+    is_equal(result, 20)
+
+
+@pytest.mark.asyncio
+async def test_run_async_concurrent_mode():
+    """Test async execution with concurrent mode."""
+    @tool_call(concurrent=True)
+    def concurrent_function(x: int, y: int) -> int:
+        """Function that should run concurrently."""
+        time.sleep(0.01)
+        return x * y
+
+    result = await concurrent_function.async_run({"x": 5, "y": 6})
+    is_equal(result, 30)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_with_async_function():
+    """Test concurrent parameter with actual async function."""
+    @tool_call(concurrent=True)
+    async def async_concurrent_function(x: int, delay_ms: int = 10) -> dict:
+        """Async function with concurrent execution."""
+        await asyncio.sleep(delay_ms / 1000.0)
+        return {"result": x * 5, "type": "async"}
+
+    start_time = time.time()
+    result = await async_concurrent_function.async_run({"x": 6, "delay_ms": 50})
+    elapsed = time.time() - start_time
+
+    is_equal(result["result"], 30)
+    is_equal(result["type"], "async")
+    is_true(elapsed >= 0.05)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_mixed_sync_async():
+    """Test concurrent execution with both sync and async functions."""
+    @tool_call(concurrent=True)
+    def sync_concurrent(x: int) -> dict:
+        time.sleep(0.01)
+        return {"result": x * 2, "type": "sync"}
+
+    @tool_call(concurrent=True)
+    async def async_concurrent(x: int) -> dict:
+        await asyncio.sleep(0.01)
+        return {"result": x * 3, "type": "async"}
+
+    start_time = time.time()
+    tasks = [
+        sync_concurrent.async_run({"x": 10}),
+        async_concurrent.async_run({"x": 10}),
+    ]
+    results = await asyncio.gather(*tasks)
+    elapsed = time.time() - start_time
+
+    is_true(elapsed < 0.025)
+    is_equal(len(results), 2)
+    
+    result_values = {r["result"]: r["type"] for r in results}
+    is_equal(result_values[20], "sync")
+    is_equal(result_values[30], "async")
+
+
+@pytest.mark.asyncio
+async def test_concurrent_async_regression():
+    """Regression test: ensure async functions work with concurrent=True.
+    
+    This test prevents the bug where async functions were incorrectly
+    sent to ThreadPoolExecutor, which can't handle coroutines.
+    """
+    @tool_call(concurrent=True)
+    async def async_function_that_used_to_break(x: int) -> dict:
+        """This used to fail before the async concurrent fix."""
+        await asyncio.sleep(0.01)
+        return {"value": x * 10, "executed": True}
+    
+    result = await async_function_that_used_to_break.async_run({"x": 5})
+    
+    is_equal(result["value"], 50)
+    is_equal(result["executed"], True)
+    
+    @tool_call(concurrent=True)
+    def sync_concurrent_function(x: int) -> dict:
+        time.sleep(0.01)
+        return {"value": x * 20, "executed": True}
+    
+    async_result, sync_result = await asyncio.gather(
+        async_function_that_used_to_break.async_run({"x": 3}),
+        sync_concurrent_function.async_run({"x": 3})
+    )
+    
+    is_equal(async_result["value"], 30)
+    is_equal(sync_result["value"], 60)
+    is_equal(async_result["executed"], True)
+    is_equal(sync_result["executed"], True)
+
+
+@pytest.mark.asyncio
+async def test_parallel_execution_timing():
+    """Test that N concurrent tools with sleep take ~sleep time, not N*sleep time."""
+    
+    @tool_call(concurrent=True)
+    def sleep_tool(tool_id: int, sleep_ms: int = 100) -> dict:
+        """Tool that sleeps for specified milliseconds."""
+        time.sleep(sleep_ms / 1000.0)
+        return {"tool_id": tool_id, "completed": True, "sleep_ms": sleep_ms}
+    
+    num_tools = 10
+    sleep_time_ms = 100
+    
+    start_time = time.time()
+    
+    tasks = [
+        sleep_tool.async_run({"tool_id": i, "sleep_ms": sleep_time_ms})
+        for i in range(num_tools)
+    ]
+    
+    results = await asyncio.gather(*tasks)
+    elapsed = time.time() - start_time
+    
+    is_equal(len(results), num_tools)
+    for i, result in enumerate(results):
+        is_equal(result["tool_id"], i)
+        is_equal(result["completed"], True)
+        is_equal(result["sleep_ms"], sleep_time_ms)
+    
+    sequential_time = (num_tools * sleep_time_ms) / 1000.0
+    parallel_time = sleep_time_ms / 1000.0
+    
+    max_allowed_time = parallel_time + 0.05
+    
+    is_true(elapsed < max_allowed_time, 
+            f"Parallel execution took {elapsed:.3f}s, expected ~{parallel_time:.3f}s, "
+            f"but would be {sequential_time:.3f}s if sequential")
+    
+    is_true(elapsed >= parallel_time * 0.9)
+
+
+@pytest.mark.asyncio  
+async def test_mixed_async_sync_parallel_timing():
+    """Test parallel timing with mixed async and sync concurrent functions."""
+    
+    @tool_call(concurrent=True)
+    def sync_sleep_tool(tool_id: int, sleep_ms: int = 80) -> dict:
+        time.sleep(sleep_ms / 1000.0)
+        return {"tool_id": tool_id, "type": "sync", "sleep_ms": sleep_ms}
+    
+    @tool_call(concurrent=True)
+    async def async_sleep_tool(tool_id: int, sleep_ms: int = 80) -> dict:
+        await asyncio.sleep(sleep_ms / 1000.0)
+        return {"tool_id": tool_id, "type": "async", "sleep_ms": sleep_ms}
+    
+    start_time = time.time()
+    
+    tasks = [
+        sync_sleep_tool.async_run({"tool_id": 0, "sleep_ms": 80}),
+        async_sleep_tool.async_run({"tool_id": 1, "sleep_ms": 80}),
+        sync_sleep_tool.async_run({"tool_id": 2, "sleep_ms": 80}),
+        async_sleep_tool.async_run({"tool_id": 3, "sleep_ms": 80}),
+        sync_sleep_tool.async_run({"tool_id": 4, "sleep_ms": 80}),
+    ]
+    
+    results = await asyncio.gather(*tasks)
+    elapsed = time.time() - start_time
+    
+    is_equal(len(results), 5)
+    sync_results = [r for r in results if r["type"] == "sync"]
+    async_results = [r for r in results if r["type"] == "async"]
+    
+    is_equal(len(sync_results), 3)
+    is_equal(len(async_results), 2)
+    
+    is_true(elapsed < 0.15)
+    is_true(elapsed >= 0.07)
