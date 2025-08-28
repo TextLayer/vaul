@@ -1,11 +1,9 @@
 import json
-import time
-import asyncio
 from typing import Optional
 import pytest
 from pydantic import BaseModel
 from vaul.decorators import StructuredOutput, tool_call
-from tests.utils.assertion import is_equal, is_true, is_false, contains
+from tests.utils.assertion import is_equal, is_true, contains
 
 
 class TestOutput(StructuredOutput):
