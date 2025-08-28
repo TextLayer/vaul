@@ -190,7 +190,7 @@ async def main():
     tasks = [
         toolkit.async_run_tool("concurrent_operation", {"delay_ms": 100}),
         toolkit.async_run_tool("concurrent_operation", {"delay_ms": 200}),
-        toolkit.async_run_tool("async_computation", {"x": 1, "b": 2}),
+        toolkit.async_run_tool("async_computation", {"x": 1, "y": 2}),
     ]
 
     results = await asyncio.gather(*tasks)
