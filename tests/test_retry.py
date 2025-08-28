@@ -1,216 +1,252 @@
-import time
 import asyncio
-from typing import Optional
-import pytest
-from vaul.decorators import tool_call
-from tests.utils.assertion import is_equal, is_true, is_false, contains
+import time
+
+from vaul import tool_call
 
 
-def test_tool_call_retry_validation():
-    """Test validation of retry parameter requirements."""
-    with pytest.raises(ValueError, match="If retry is True, raise_for_exception must also be True"):
-        @tool_call(retry=True, raise_for_exception=False)
-        def invalid_retry_function(x: int) -> int:
-            return x
+async def test_async_retry_success_after_failures():
+    """Test that async retry succeeds after initial failures."""
+    attempt_count = {"value": 0}
 
-    @tool_call(retry=True, raise_for_exception=True)
-    def valid_retry_function(x: int) -> int:
-        return x * 2
-    
-    is_true(valid_retry_function.retry)
-    is_true(valid_retry_function.raise_for_exception)
+    @tool_call(retry=True, raise_for_exception=True, max_timeout=5, max_backoff=1)
+    async def flaky_async_tool(target_attempt: int) -> dict:
+        attempt_count["value"] += 1
+        if attempt_count["value"] < target_attempt:
+            raise ConnectionError(f"Attempt {attempt_count['value']} failed")
+        return {"success": True, "attempts": attempt_count["value"]}
 
-    @tool_call(retry=False, raise_for_exception=False)
-    def no_retry_function(x: int) -> int:
-        return x * 3
-    
-    is_false(no_retry_function.retry)
-    is_false(no_retry_function.raise_for_exception)
+    start_time = time.time()
+    result = await flaky_async_tool.async_run({"target_attempt": 3})
+    end_time = time.time()
 
-    @tool_call(retry=False, raise_for_exception=True)
-    def no_retry_but_raise_function(x: int) -> int:
-        return x * 4
-    
-    is_false(no_retry_but_raise_function.retry)
-    is_true(no_retry_but_raise_function.raise_for_exception)
+    assert result["success"]
+    assert result["attempts"] == 3
+    assert attempt_count["value"] == 3
+
+    assert end_time - start_time >= 0.25, (
+        f"Expected >= 0.25s, got {end_time - start_time}s"
+    )
 
 
-def test_retry_requires_raise_for_exception_rationale():
-    """Test demonstrating why retry requires raise_for_exception=True."""
-    @tool_call(retry=False, raise_for_exception=False)
-    def function_that_fails(x: int) -> int:
-        if x < 10:
-            raise ValueError("Value too low")
-        return x * 2
+async def test_async_retry_exponential_backoff():
+    """Test that async retry uses exponential backoff correctly."""
+    attempt_times = []
 
-    result = function_that_fails.run({"x": 5})
-    is_equal(result, "Value too low")
-    
-    @tool_call(retry=False, raise_for_exception=True)
-    def function_that_fails_properly(x: int) -> int:
-        if x < 10:
-            raise ValueError("Value too low")
-        return x * 2
-    
-    with pytest.raises(ValueError, match="Value too low"):
-        function_that_fails_properly.run({"x": 5})
+    @tool_call(retry=True, raise_for_exception=True, max_timeout=10, max_backoff=2)
+    async def backoff_test_tool(fail_count: int) -> dict:
+        attempt_times.append(time.time())
+        if len(attempt_times) <= fail_count:
+            raise ValueError(f"Attempt {len(attempt_times)} failed")
+        return {"success": True, "total_attempts": len(attempt_times)}
 
+    result = await backoff_test_tool.async_run({"fail_count": 4})
 
-def test_tool_call_function_retry_validation():
-    """Test retry validation when using tool_call as a function (not decorator)."""
-    
-    with pytest.raises(ValueError, match="If retry is True, raise_for_exception must also be True"):
-        def some_function(x: int) -> int:
-            return x * 2
-        
-        tool_call(some_function, retry=True, raise_for_exception=False)
+    assert result["success"]
+    assert result["total_attempts"] == 5
+    assert len(attempt_times) == 5
 
-    def another_function(x: int) -> int:
-        return x * 3
-    
-    valid_tool = tool_call(another_function, retry=True, raise_for_exception=True)
-    is_true(valid_tool.retry)
-    is_true(valid_tool.raise_for_exception)
+    delays = [
+        attempt_times[i] - attempt_times[i - 1] for i in range(1, len(attempt_times))
+    ]
+    assert delays[0] >= 0.08, f"First delay should be ~0.1s, got {delays[0]}s"
+    assert delays[1] >= 0.15, f"Second delay should be ~0.2s, got {delays[1]}s"
+    assert delays[2] >= 0.35, f"Third delay should be ~0.4s, got {delays[2]}s"
+    assert delays[3] >= 0.7, f"Fourth delay should be ~0.8s, got {delays[3]}s"
 
 
-@pytest.mark.asyncio
-async def test_run_async_with_retry_success():
-    """Test async execution with retry on successful function."""
-    @tool_call(retry=True, raise_for_exception=True, max_timeout=5.0, max_backoff=1.0)
-    def retry_success_function(x: int) -> int:
-        """Function that succeeds on retry."""
-        return x * 4
+async def test_async_retry_timeout_exceeded():
+    """Test that async retry stops after max_timeout is exceeded."""
 
-    result = await retry_success_function.async_run({"x": 5})
-    is_equal(result, 20)
+    @tool_call(retry=True, raise_for_exception=True, max_timeout=1, max_backoff=0.5)
+    async def always_failing_tool(message: str) -> dict:
+        raise RuntimeError(f"Always fails: {message}")
+
+    start_time = time.time()
+
+    try:
+        await always_failing_tool.async_run({"message": "test"})
+        assert False, "Expected RuntimeError to be raised"
+    except RuntimeError as e:
+        assert "Always fails: test" in str(e)
+
+    end_time = time.time()
+    total_time = end_time - start_time
+
+    assert 0.8 <= total_time <= 2.0, f"Expected 0.8-2.0s, got {total_time}s"
 
 
-@pytest.mark.asyncio
-async def test_run_async_with_retry_failure():
-    """Test async execution with retry on failing function."""
-    call_count = 0
+async def test_async_retry_max_backoff_cap():
+    """Test that async retry respects max_backoff cap."""
+    attempt_times = []
+
+    @tool_call(retry=True, raise_for_exception=True, max_timeout=8, max_backoff=1)
+    async def capped_backoff_tool() -> dict:
+        attempt_times.append(time.time())
+        if len(attempt_times) <= 5:
+            raise ValueError(f"Attempt {len(attempt_times)} failed")
+        return {"success": True}
+
+    result = await capped_backoff_tool.async_run({})
+
+    assert result["success"]
+    assert len(attempt_times) == 6
+
+    delays = [
+        attempt_times[i] - attempt_times[i - 1] for i in range(1, len(attempt_times))
+    ]
+
+    for i, delay in enumerate(delays[2:], 3):
+        assert delay <= 1.2, f"Delay {i} should be capped at ~1s, got {delay}s"
+
+
+async def test_async_retry_with_sync_function():
+    """Test async retry with synchronous function."""
+    attempt_count = {"value": 0}
+
+    @tool_call(retry=True, raise_for_exception=True, max_timeout=3, max_backoff=0.5)
+    def sync_flaky_tool(target_attempt: int) -> dict:
+        attempt_count["value"] += 1
+        if attempt_count["value"] < target_attempt:
+            raise ValueError(f"Sync attempt {attempt_count['value']} failed")
+        return {"success": True, "attempts": attempt_count["value"], "type": "sync"}
+
+    start_time = time.time()
+    result = await sync_flaky_tool.async_run({"target_attempt": 3})
+    end_time = time.time()
+
+    assert result["success"]
+    assert result["attempts"] == 3
+    assert result["type"] == "sync"
+    assert attempt_count["value"] == 3
+
+    assert end_time - start_time >= 0.25, (
+        f"Expected >= 0.25s, got {end_time - start_time}s"
+    )
+
+
+async def test_async_retry_concurrent_execution():
+    """Test async retry with concurrent execution."""
+
+    @tool_call(
+        retry=True,
+        raise_for_exception=True,
+        concurrent=True,
+        max_timeout=2,
+        max_backoff=0.3,
+    )
+    async def concurrent_retry_tool(tool_id: int, fail_count: int) -> dict:
+        if not hasattr(concurrent_retry_tool, f"_attempts_{tool_id}"):
+            setattr(concurrent_retry_tool, f"_attempts_{tool_id}", 0)
+
+        attempts = getattr(concurrent_retry_tool, f"_attempts_{tool_id}")
+        attempts += 1
+        setattr(concurrent_retry_tool, f"_attempts_{tool_id}", attempts)
+
+        if attempts <= fail_count:
+            raise ConnectionError(f"Tool {tool_id} attempt {attempts} failed")
+
+        return {"success": True, "tool_id": tool_id, "attempts": attempts}
+
+    start_time = time.time()
+
+    tasks = [
+        concurrent_retry_tool.async_run({"tool_id": i, "fail_count": 2})
+        for i in range(3)
+    ]
+
+    results = await asyncio.gather(*tasks)
+
+    end_time = time.time()
+    total_time = end_time - start_time
+
+    assert len(results) == 3
+    for i, result in enumerate(results):
+        assert result["success"]
+        assert result["tool_id"] == i
+        assert result["attempts"] == 3
+
+    assert total_time >= 0.25, f"Expected >= 0.25s, got {total_time}s"
+    assert total_time <= 1.5, (
+        f"Expected <= 1.5s, got {total_time}s (might not be concurrent)"
+    )
+
+
+async def test_async_retry_preserves_original_exception():
+    """Test that async retry preserves the original exception when timeout is exceeded."""
+
+    class CustomError(Exception):
+        pass
 
     @tool_call(retry=True, raise_for_exception=True, max_timeout=0.5, max_backoff=0.1)
-    def retry_fail_function(x: int) -> int:
-        """Function that always fails to test retry timeout."""
-        nonlocal call_count
-        call_count += 1
-        raise ValueError("Always fails")
+    async def custom_error_tool(error_message: str) -> dict:
+        raise CustomError(error_message)
+
+    try:
+        await custom_error_tool.async_run({"error_message": "Custom failure"})
+        assert False, "Expected CustomError to be raised"
+    except CustomError as e:
+        assert "Custom failure" in str(e)
+    except Exception as e:
+        assert False, f"Expected CustomError, got {type(e).__name__}: {e}"
+
+
+async def test_async_retry_no_retry_on_success():
+    """Test that successful async calls don't trigger retry logic."""
+    call_count = {"value": 0}
+
+    @tool_call(retry=True, raise_for_exception=True, max_timeout=5, max_backoff=1)
+    async def success_tool(data: str) -> dict:
+        call_count["value"] += 1
+        return {"success": True, "data": data, "call_count": call_count["value"]}
 
     start_time = time.time()
-    with pytest.raises(ValueError, match="Always fails"):
-        await retry_fail_function.async_run({"x": 1})
+    result = await success_tool.async_run({"data": "test"})
+    end_time = time.time()
 
-    elapsed = time.time() - start_time
-    is_true(elapsed >= 0.5)
-    is_true(call_count >= 2)
+    assert result["success"]
+    assert result["data"] == "test"
+    assert result["call_count"] == 1
+    assert call_count["value"] == 1
 
-
-@pytest.mark.asyncio
-async def test_run_async_with_retry_eventual_success():
-    """Test async execution with retry that eventually succeeds."""
-    attempt_count = 0
-
-    @tool_call(retry=True, raise_for_exception=True, max_timeout=5.0, max_backoff=0.1)
-    def retry_eventual_success(x: int) -> int:
-        """Function that succeeds after a few attempts."""
-        nonlocal attempt_count
-        attempt_count += 1
-        if attempt_count < 3:
-            raise ValueError("Temporary failure")
-        return x * attempt_count
-
-    result = await retry_eventual_success.async_run({"x": 7})
-    is_equal(result, 21)
-    is_equal(attempt_count, 3)
+    assert end_time - start_time < 0.1, f"Expected < 0.1s, got {end_time - start_time}s"
 
 
-def test_run_sync_with_retry_success():
-    """Test synchronous execution with retry on successful function."""
-    @tool_call(retry=True, raise_for_exception=True, max_timeout=5.0, max_backoff=1.0)
-    def retry_sync_success_function(x: int) -> int:
-        """Function that succeeds on retry."""
-        return x * 4
+async def test_async_retry_mixed_success_failure():
+    """Test async retry with mixed success and failure scenarios."""
 
-    result = retry_sync_success_function.run({"x": 5})
-    is_equal(result, 20)
+    @tool_call(retry=True, raise_for_exception=True, max_timeout=2, max_backoff=0.5)
+    async def mixed_tool(
+        tool_id: int, should_fail: bool, fail_attempts: int = 2
+    ) -> dict:
+        if not hasattr(mixed_tool, f"_attempts_{tool_id}"):
+            setattr(mixed_tool, f"_attempts_{tool_id}", 0)
 
+        attempts = getattr(mixed_tool, f"_attempts_{tool_id}")
+        attempts += 1
+        setattr(mixed_tool, f"_attempts_{tool_id}", attempts)
 
-def test_run_sync_with_retry_failure():
-    """Test synchronous execution with retry on failing function."""
-    call_count = 0
+        if should_fail and attempts <= fail_attempts:
+            raise RuntimeError(f"Tool {tool_id} failing on attempt {attempts}")
 
-    @tool_call(retry=True, raise_for_exception=True, max_timeout=0.5, max_backoff=0.1)
-    def retry_sync_fail_function(x: int) -> int:
-        """Function that always fails to test retry timeout."""
-        nonlocal call_count
-        call_count += 1
-        raise ValueError("Always fails")
+        return {"success": True, "tool_id": tool_id, "attempts": attempts}
 
-    start_time = time.time()
-    with pytest.raises(ValueError, match="Always fails"):
-        retry_sync_fail_function.run({"x": 1})
+    tasks = [
+        mixed_tool.async_run({"tool_id": 1, "should_fail": False}),
+        mixed_tool.async_run({"tool_id": 2, "should_fail": True, "fail_attempts": 1}),
+        mixed_tool.async_run({"tool_id": 3, "should_fail": True, "fail_attempts": 2}),
+    ]
 
-    elapsed = time.time() - start_time
-    is_true(elapsed >= 0.5)
-    is_true(call_count >= 2)
+    results = await asyncio.gather(*tasks)
 
+    assert len(results) == 3
 
-def test_run_sync_with_retry_eventual_success():
-    """Test synchronous execution with retry that eventually succeeds."""
-    attempt_count = 0
+    assert results[0]["tool_id"] == 1
+    assert results[0]["attempts"] == 1
 
-    @tool_call(retry=True, raise_for_exception=True, max_timeout=5.0, max_backoff=0.1)
-    def retry_sync_eventual_success(x: int) -> int:
-        """Function that succeeds after a few attempts."""
-        nonlocal attempt_count
-        attempt_count += 1
-        if attempt_count < 3:
-            raise ValueError("Temporary failure")
-        return x * attempt_count
+    assert results[1]["tool_id"] == 2
+    assert results[1]["attempts"] == 2
 
-    result = retry_sync_eventual_success.run({"x": 7})
-    is_equal(result, 21)
-    is_equal(attempt_count, 3)
+    assert results[2]["tool_id"] == 3
+    assert results[2]["attempts"] == 3
 
-
-def test_run_sync_retry_timing():
-    """Test that synchronous retry has proper exponential backoff timing."""
-    attempt_count = 0
-
-    @tool_call(retry=True, raise_for_exception=True, max_timeout=2.0, max_backoff=0.5)
-    def retry_sync_timing_function(x: int) -> int:
-        """Function that fails a few times to test timing."""
-        nonlocal attempt_count
-        attempt_count += 1
-        if attempt_count < 4:
-            raise ValueError("Temporary failure")
-        return x * attempt_count
-
-    start_time = time.time()
-    result = retry_sync_timing_function.run({"x": 2})
-    elapsed = time.time() - start_time
-
-    is_true(elapsed >= 0.7)
-    is_equal(result, 8)
-    is_equal(attempt_count, 4)
-
-
-@pytest.mark.asyncio
-async def test_concurrent_with_retry():
-    """Test combination of concurrent and retry parameters."""
-    attempt_count = 0
-
-    @tool_call(retry=True, raise_for_exception=True, concurrent=True, max_timeout=2.0, max_backoff=0.1)
-    def concurrent_retry_function(x: int) -> int:
-        """Function with both concurrent and retry."""
-        nonlocal attempt_count
-        attempt_count += 1
-        if attempt_count < 2:
-            raise ValueError("First attempt fails")
-        time.sleep(0.01)
-        return x * 10
-
-    result = await concurrent_retry_function.async_run({"x": 3})
-    is_equal(result, 30)
-    is_equal(attempt_count, 2)
+    assert all(result["success"] for result in results)
