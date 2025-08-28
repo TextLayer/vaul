@@ -288,6 +288,8 @@ class ToolCall(BaseTool):
         try:
             if self.concurrent:
                 loop = asyncio.get_running_loop()
+                if asyncio.iscoroutinefunction(self.validate_func):
+                    return await self.validate_func(**kwargs)
                 with ThreadPoolExecutor() as executor:
                     return await loop.run_in_executor(executor, lambda: self.validate_func(**kwargs))
             result = self.validate_func(**kwargs)
