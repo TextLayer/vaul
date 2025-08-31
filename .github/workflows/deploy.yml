@@ -37,8 +37,8 @@ jobs:
 
       - name: Update version in setup.py
         run: |
-          sed -i "s/version=['\"]v\([0-9.]\+\)['\"]/version='v${PACKAGE_VERSION}'/" setup.py
-          echo "Updated setup.py to version v$PACKAGE_VERSION"
+          sed -i "s/version=['\"]v\([0-9.]\+\)['\"]/version='${PACKAGE_VERSION}'/" setup.py
+          echo "Updated setup.py to version $PACKAGE_VERSION"
 
       - name: Commit and push version bump
         run: |
