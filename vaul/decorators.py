@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import inspect
+import time
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from pydantic import TypeAdapter, ValidationError, validate_call
 
@@ -133,17 +136,42 @@ class ToolCall(BaseTool):
         https://pypi.org/project/instructor/
     """
 
-    def __init__(self, func: Callable, raise_for_exception: bool = False) -> None:
+    def __init__(self, func: Callable, raise_for_exception: bool = False, retry: bool = False, max_timeout: Optional[int] = None, max_backoff: Optional[int] = None, concurrent: bool = False) -> None:
+        """
+        Initialize the ToolCall decorator.
+
+        Args:
+            func: The function to be decorated
+            raise_for_exception: Raises an exception when a tool call fails, required if retry is set to True
+            retry: Whether to retry a tool call execution upon failure. If set to True, raise_for_exception must also be True
+            max_timeout: Maximum tool call retry timeout in seconds
+            max_backoff: Maximum time to run exponential backoff on tool call failure in seconds
+            concurrent: Whether to execute this tool call concurrently (e.g. in a thread or async context)
+
+        Raises:
+            ValueError: If retry is True but raise_for_exception is False.
+        """
         super().__init__()
+
+        if retry and not raise_for_exception:
+            raise ValueError("If retry is True, raise_for_exception must also be True")
+
         self.func = func
         self.validate_func = validate_call(func)
         self.tool_call_schema = self._generate_tool_call_schema()
         self.raise_for_exception = raise_for_exception
+        self.retry = retry
+        self.concurrent = concurrent
+        if self.retry:
+            self._max_timeout = max_timeout if max_timeout is not None else 60
+            self._max_backoff = max_backoff if max_backoff is not None else 120
+        else:
+            self._max_timeout = None
+            self._max_backoff = None
 
     def _generate_tool_call_schema(self) -> Dict[str, Any]:
         sig = inspect.signature(self.func)
 
-        schema = {}
         properties = {}
         required = []
 
@@ -164,10 +192,11 @@ class ToolCall(BaseTool):
             if param.default is inspect.Parameter.empty:
                 required.append(name)
 
-        schema["properties"] = properties
-        schema["required"] = sorted(required) if required else []
-        schema["type"] = "object"
-
+        schema = {
+            "properties": properties,
+            "required": sorted(required) if required else [],
+            "type": "object",
+        }
         schema = remove_keys_recursively(schema, "additionalProperties")
         schema = remove_keys_recursively(schema, "title")
 
@@ -211,24 +240,82 @@ class ToolCall(BaseTool):
         )
 
     def run(self, arguments: Dict[str, Any]) -> Any:
+        if not self.retry:
+            try:
+                return self.validate_func(**arguments)
+            except Exception as e:
+                if self.raise_for_exception:
+                    raise
+                return str(e)
+
+        start_time = time.monotonic()
+        attempt = 0
+
+        while True:
+            try:
+                return self.validate_func(**arguments)
+            except Exception as e:
+                elapsed = time.monotonic() - start_time
+                if elapsed >= self._max_timeout:
+                    if self.raise_for_exception:
+                        raise
+                    return str(e)
+
+                backoff = min(0.1 * (2 ** attempt), self._max_backoff)
+                time.sleep(backoff)
+                attempt += 1
+
+    async def async_run(self, arguments: Dict[str, Any]) -> Any:
+        if not self.retry:
+            return await self._async_execute(**arguments)
+
+        start_time = time.monotonic()
+        attempt = 0
+
+        while True:
+            try:
+                return await self._async_execute(**arguments)
+            except Exception:
+                elapsed = time.monotonic() - start_time
+                if elapsed >= self._max_timeout:
+                    raise
+
+                backoff = min(0.1 * (2 ** attempt), self._max_backoff)
+                await asyncio.sleep(backoff)
+                attempt += 1
+
+    async def _async_execute(self, **kwargs) -> Any:
         try:
-            # Use the validated wrapper to automatically parse and validate
-            # arguments just like direct function calls
-            return self.validate_func(**arguments)
+            if self.concurrent:
+                loop = asyncio.get_running_loop()
+                if asyncio.iscoroutinefunction(self.validate_func):
+                    return await self.validate_func(**kwargs)
+                with ThreadPoolExecutor() as executor:
+                    return await loop.run_in_executor(executor, lambda: self.validate_func(**kwargs))
+            result = self.validate_func(**kwargs)
+            return await result if asyncio.iscoroutine(result) else result
         except Exception as e:
             if self.raise_for_exception:
                 raise
             return str(e)
 
 
-def tool_call(func: Callable = None, *, raise_for_exception: bool = False) -> ToolCall:
+def tool_call(func: Callable = None, *, raise_for_exception: bool = False, retry: bool = False, max_timeout: Optional[int] = None, max_backoff: Optional[int] = None, concurrent: bool = False) -> ToolCall:
     """
-    Function to apply the ToolCall decorator to a function, with optional raise_for_exception flag.
+    Function to apply the ToolCall decorator to a function.
+
+    Args:
+        func: The function to be decorated
+        raise_for_exception: Whether to raise an exception when a tool call fails, required if retry is set to True
+        retry: Whether to retry a tool call execution upon failure. If set to True, raise_for_exception must also be True
+        max_timeout: Maximum tool call retry timeout in seconds
+        max_backoff: Maximum time to run exponential backoff on tool call failure in seconds
+        concurrent: Whether to execute this tool call concurrently (e.g. in a thread or async context)
     """
     if func is not None and callable(func):
-        return ToolCall(func, raise_for_exception=raise_for_exception)
+        return ToolCall(func, raise_for_exception=raise_for_exception, retry=retry, max_timeout=max_timeout, max_backoff=max_backoff, concurrent=concurrent)
 
     def wrapper(f):
-        return ToolCall(f, raise_for_exception=raise_for_exception)
+        return ToolCall(f, raise_for_exception=raise_for_exception, retry=retry, max_timeout=max_timeout, max_backoff=max_backoff, concurrent=concurrent)
 
     return wrapper
