@@ -762,6 +762,9 @@ session = await setup_mcp_session()
 toolkit.add_mcp(session)
 ```
 
+Note on SSE lifecycle:
+- Vaul discovers tools over a single SSE connection, but each tool call establishes a fresh SSE connection and ClientSession. This mirrors stdio behavior and avoids reusing a closed session between discovery and calls.
+
 #### MCP Tool Metadata
 
 Tools imported from MCP servers include their full metadata:

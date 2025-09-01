@@ -167,29 +167,32 @@ def tools_from_mcp(session: ClientSession) -> List[ToolCall]:
 
 def tools_from_mcp_url(
     url: str,
-    headers: Optional[Dict[str, str]] = None
+    headers: Dict[str, str] = {}
 ) -> List[ToolCall]:
     """
     Load tools from an MCP server URL (SSE endpoint).
     
     Args:
         url: The SSE endpoint URL
-        headers: Optional HTTP headers
+        headers: HTTP headers
         
     Returns:
         List of ToolCall objects that can be added to a Toolkit
     """
     async def load():
-        async with sse_client(url, headers=headers or {}) as (read, write):
+        async with sse_client(url, headers=headers) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 
                 def create_tool(tool_metadata: Any) -> ToolCall:
-                    """Create a tool that uses the SSE session."""
+                    """Create a tool that reconnects for each call over SSE."""
                     def create_async_call(name: str):
                         async def call(**kwargs):
-                            result = await session.call_tool(name=name, arguments=kwargs)
-                            return _extract_result_content(result)
+                            async with sse_client(url, headers=headers) as (r, w):
+                                async with ClientSession(r, w) as session:
+                                    await session.initialize()
+                                    result = await session.call_tool(name=name, arguments=kwargs)
+                                    return _extract_result_content(result)
                         return call
                     
                     return _create_tool_from_metadata(tool_metadata, create_async_call)
