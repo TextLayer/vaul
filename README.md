@@ -135,6 +135,16 @@ toolkit.add_tools(multiply_numbers, subtract_numbers)
 # Generate schemas for all tools
 tool_schemas = toolkit.tool_schemas()
 
+# With a reranker, filter schemas based on a query
+from vaul.rerankers import CohereReranker
+toolkit_rerank = Toolkit(reranker=CohereReranker(api_key="YOUR_KEY"))
+toolkit_rerank.add_tools(multiply_numbers, subtract_numbers)
+filtered = toolkit_rerank.tool_schemas(
+    messages="multiply two numbers", top_n=1, score_threshold=0.6
+)
+
+# Only tools meeting the score threshold are returned
+
 # Execute a specific tool by name
 result = toolkit.run_tool("add_numbers", {"a": 5, "b": 3})
 print(result)  # Output: 8
