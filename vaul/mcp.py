@@ -222,7 +222,11 @@ def tools_from_mcp(session: ClientSession) -> List[ToolCall]:
     return _run_async(_load_tools_async(session, create_tool))
 
 
-def tools_from_mcp_url(url: str, headers: Dict[str, str] | None = None) -> List[ToolCall]:
+def tools_from_mcp_url(
+    url: str,
+    headers: Dict[str, str] | None = None,
+    hidden_context: Dict[str, Any] | None = None,
+) -> List[ToolCall]:
     hdrs = dict(headers or {})
     pool = _get_pool(url, hdrs)
 
@@ -233,7 +237,8 @@ def tools_from_mcp_url(url: str, headers: Dict[str, str] | None = None) -> List[
         def create_tool(tool_md: Any) -> ToolCall:
             def create_async_call(name: str):
                 async def call(**kwargs):
-                    result = await pool.call_tool_async(name, kwargs)
+                    merged = {**kwargs, **(hidden_context or {})}
+                    result = await pool.call_tool_async(name, merged)
                     return _extract_result_content(result)
                 return call
             return _create_tool_from_metadata(tool_md, create_async_call)
