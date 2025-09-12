@@ -15,7 +15,7 @@ from .decorators import tool_call, ToolCall
 logger = logging.getLogger(__name__)
 
 
-def _run_async(coro: Any) -> Any:  # pragma: no cover
+def _run_async(coro: Any) -> Any:
     """Run an async coroutine synchronously, handling nested event loops."""
     try:
         loop = asyncio.get_running_loop()
@@ -151,20 +151,20 @@ class _PersistentSSEPool:
         self.session: Any = None
         self._lock: Optional[asyncio.Lock] = None
         self._init_ok = False
-        self.thread.start()  # pragma: no cover
-        if not self._ready.wait(timeout=10):  # pragma: no cover
+        self.thread.start()
+        if not self._ready.wait(timeout=10):
             self.close()
             raise RuntimeError("MCP SSE pool initialization timed out")
-        if not self._init_ok:  # pragma: no cover
+        if not self._init_ok:
             self.close()
             raise RuntimeError("MCP SSE pool failed to initialize")
 
-    def _loop_thread(self):  # pragma: no cover
+    def _loop_thread(self):
         asyncio.set_event_loop(self.loop)
         self.loop.create_task(self._open())
         self.loop.run_forever()
 
-    async def _open(self):  # pragma: no cover
+    async def _open(self):
         ok = False
         try:
             self._sse_ctx = sse_client(self.url, headers=self.headers)
@@ -190,17 +190,17 @@ class _PersistentSSEPool:
         async with self._lock:
             return await self.session.list_tools()
 
-    def call_tool_async(self, name: str, arguments: dict):  # pragma: no cover
+    def call_tool_async(self, name: str, arguments: dict):
         coro = self._call_tool(name, arguments)
         cfut = asyncio.run_coroutine_threadsafe(coro, self.loop)
         return asyncio.wrap_future(cfut)
 
-    def list_tools_async(self):  # pragma: no cover
+    def list_tools_async(self):
         coro = self._list_tools()
         cfut = asyncio.run_coroutine_threadsafe(coro, self.loop)
         return asyncio.wrap_future(cfut)
 
-    def close(self):  # pragma: no cover
+    def close(self):
         if self._closed.is_set():
             return
 
@@ -219,7 +219,7 @@ class _PersistentSSEPool:
         self._closed.set()
 
 
-def _get_pool(url: str, headers: dict[str, str]) -> _PersistentSSEPool:  # pragma: no cover
+def _get_pool(url: str, headers: dict[str, str]) -> _PersistentSSEPool:
     with _persistent_pools_lock:
         pool = _persistent_pools.get(url)
         if pool is None:
@@ -228,21 +228,21 @@ def _get_pool(url: str, headers: dict[str, str]) -> _PersistentSSEPool:  # pragm
         return pool
 
 
-def close_mcp_url(url: str) -> None:  # pragma: no cover
+def close_mcp_url(url: str) -> None:
     with _persistent_pools_lock:
         pool = _persistent_pools.pop(url, None)
     if pool:
         pool.close()
 
 
-def close_all_mcp_urls() -> None:  # pragma: no cover
+def close_all_mcp_urls() -> None:
     with _persistent_pools_lock:
         urls = list(_persistent_pools.keys())
     for url in urls:
         close_mcp_url(url)
 
 
-def tools_from_mcp(session: ClientSession) -> List[ToolCall]:  # pragma: no cover
+def tools_from_mcp(session: ClientSession) -> List[ToolCall]:
     def create_tool(tool_metadata: Any) -> ToolCall:
         def create_async_call(name: str):
             async def call(**kwargs):
@@ -253,7 +253,7 @@ def tools_from_mcp(session: ClientSession) -> List[ToolCall]:  # pragma: no cove
     return _run_async(_load_tools_async(session, create_tool))
 
 
-def tools_from_mcp_url(url: str, headers: Dict[str, str] | None = None) -> List[ToolCall]:  # pragma: no cover
+def tools_from_mcp_url(url: str, headers: Dict[str, str] | None = None) -> List[ToolCall]:
     hdrs = dict(headers or {})
 
     async def load():
@@ -284,7 +284,7 @@ def tools_from_mcp_stdio(
     command: str,
     args: Optional[List[str]] = None,
     env: Optional[Dict[str, str]] = None,
-) -> List[ToolCall]:  # pragma: no cover
+) -> List[ToolCall]:
     server_params = StdioServerParameters(
         command=command,
         args=args or [],
