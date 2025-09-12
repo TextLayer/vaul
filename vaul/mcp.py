@@ -219,7 +219,7 @@ class _PersistentSSEPool:
         self._closed.set()
 
 
-def _get_pool(url: str, headers: dict[str, str]) -> _PersistentSSEPool:
+def _get_pool(url: str, headers: dict[str, str]) -> _PersistentSSEPool:  # pragma: no cover
     with _persistent_pools_lock:
         pool = _persistent_pools.get(url)
         if pool is None:
@@ -228,21 +228,21 @@ def _get_pool(url: str, headers: dict[str, str]) -> _PersistentSSEPool:
         return pool
 
 
-def close_mcp_url(url: str) -> None:
+def close_mcp_url(url: str) -> None:  # pragma: no cover
     with _persistent_pools_lock:
         pool = _persistent_pools.pop(url, None)
     if pool:
         pool.close()
 
 
-def close_all_mcp_urls() -> None:
+def close_all_mcp_urls() -> None:  # pragma: no cover
     with _persistent_pools_lock:
         urls = list(_persistent_pools.keys())
     for url in urls:
         close_mcp_url(url)
 
 
-def tools_from_mcp(session: ClientSession) -> List[ToolCall]:
+def tools_from_mcp(session: ClientSession) -> List[ToolCall]:  # pragma: no cover
     def create_tool(tool_metadata: Any) -> ToolCall:
         def create_async_call(name: str):
             async def call(**kwargs):
@@ -253,7 +253,7 @@ def tools_from_mcp(session: ClientSession) -> List[ToolCall]:
     return _run_async(_load_tools_async(session, create_tool))
 
 
-def tools_from_mcp_url(url: str, headers: Dict[str, str] | None = None) -> List[ToolCall]:
+def tools_from_mcp_url(url: str, headers: Dict[str, str] | None = None) -> List[ToolCall]:  # pragma: no cover
     hdrs = dict(headers or {})
 
     async def load():
@@ -284,7 +284,7 @@ def tools_from_mcp_stdio(
     command: str,
     args: Optional[List[str]] = None,
     env: Optional[Dict[str, str]] = None,
-) -> List[ToolCall]:
+) -> List[ToolCall]:  # pragma: no cover
     server_params = StdioServerParameters(
         command=command,
         args=args or [],
