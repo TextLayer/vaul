@@ -255,9 +255,9 @@ def tools_from_mcp(session: ClientSession) -> List[ToolCall]:
 
 def tools_from_mcp_url(url: str, headers: Dict[str, str] | None = None) -> List[ToolCall]:
     hdrs = dict(headers or {})
-    pool = _get_pool(url, hdrs)
 
     async def load():
+        pool = _get_pool(url, hdrs)
         resp = await pool.list_tools_async()
         tools_data = _parse_tools_response(resp)
 
