@@ -75,6 +75,24 @@ class TestPersistentSSEPoolBehavior:
         close_mcp_url("http://b")
         close_mcp_url("http://b")
         fake_pool.close.assert_called_once()
+class TestClosedGuardsAndRecreate:
+    def setup_method(self):
+        _persistent_pools.clear()
+
+    @patch('vaul.mcp._PersistentSSEPool')
+    def test_get_pool_recreates_if_closed(self, mock_pool_cls):
+        class ClosedDummy:
+            def __init__(self):
+                self._closed = Mock()
+                self._closed.is_set.return_value = True
+        closed = ClosedDummy()
+        _persistent_pools["http://u"] = closed
+        new_inst = Mock()
+        mock_pool_cls.return_value = new_inst
+        p = _get_pool("http://u", {})
+        assert p is new_inst
+        assert _persistent_pools["http://u"] is new_inst
+
 
 
 class TestPoolLifecycle:
