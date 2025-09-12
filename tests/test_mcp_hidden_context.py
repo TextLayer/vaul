@@ -23,7 +23,7 @@ def test_hidden_context_merge_precedence(mock_get_pool):
     t = tools[0]
     out = t.run({"a": 9, "c": 3})
     assert out == "ok"
-    fake_pool.call_tool_async.assert_awaited_with("merge_tool", {"a": 1, "b": 2, "c": 3})
+    fake_pool.call_tool_async.assert_awaited_with("merge_tool", {"a": 9, "b": 2, "c": 3})
 
 
 @patch('vaul.mcp._get_pool')

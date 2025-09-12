@@ -279,7 +279,7 @@ def tools_from_mcp_url(
         def create_tool(tool_md: Any) -> ToolCall:
             def create_async_call(name: str):
                 async def call(**kwargs):
-                    merged = {**kwargs, **hidden}
+                    merged = {**hidden, **kwargs}
                     result = await pool.call_tool_async(name, merged)
                     return _extract_result_content(result)
                 return call
