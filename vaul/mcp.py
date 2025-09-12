@@ -121,6 +121,7 @@ async def _load_tools_async(
 
 
 _persistent_pools: dict[str, "_PersistentSSEPool"] = {}
+_persistent_pools_lock = threading.Lock()
 
 
 class _PersistentSSEPool:
@@ -135,8 +136,14 @@ class _PersistentSSEPool:
         self._sess_ctx = None
         self.session: Any = None
         self._lock: Optional[asyncio.Lock] = None
+        self._init_ok = False
         self.thread.start()
-        self._ready.wait()
+        if not self._ready.wait(timeout=10):
+            self.close()
+            raise RuntimeError("MCP SSE pool initialization timed out")
+        if not self._init_ok:
+            self.close()
+            raise RuntimeError("MCP SSE pool failed to initialize")
 
     def _loop_thread(self):
         asyncio.set_event_loop(self.loop)
@@ -144,13 +151,20 @@ class _PersistentSSEPool:
         self.loop.run_forever()
 
     async def _open(self):
-        self._sse_ctx = sse_client(self.url, headers=self.headers)
-        read, write = await self._sse_ctx.__aenter__()
-        self._sess_ctx = ClientSession(read, write)
-        self.session = await self._sess_ctx.__aenter__()
-        await self.session.initialize()
-        self._lock = asyncio.Lock()
-        self._ready.set()
+        ok = False
+        try:
+            self._sse_ctx = sse_client(self.url, headers=self.headers)
+            read, write = await asyncio.wait_for(self._sse_ctx.__aenter__(), timeout=10)
+            self._sess_ctx = ClientSession(read, write)
+            self.session = await asyncio.wait_for(self._sess_ctx.__aenter__(), timeout=10)
+            await asyncio.wait_for(self.session.initialize(), timeout=10)
+            self._lock = asyncio.Lock()
+            ok = True
+        finally:
+            self._init_ok = ok
+            self._ready.set()
+            if not ok:
+                self.loop.stop()
 
     async def _call_tool(self, name: str, arguments: dict):
         assert self.session is not None and self._lock is not None
@@ -192,21 +206,24 @@ class _PersistentSSEPool:
 
 
 def _get_pool(url: str, headers: dict[str, str]) -> _PersistentSSEPool:
-    pool = _persistent_pools.get(url)
-    if pool is None:
-        pool = _PersistentSSEPool(url, headers)
-        _persistent_pools[url] = pool
-    return pool
+    with _persistent_pools_lock:
+        pool = _persistent_pools.get(url)
+        if pool is None:
+            pool = _PersistentSSEPool(url, headers)
+            _persistent_pools[url] = pool
+        return pool
 
 
 def close_mcp_url(url: str) -> None:
-    pool = _persistent_pools.pop(url, None)
+    with _persistent_pools_lock:
+        pool = _persistent_pools.pop(url, None)
     if pool:
         pool.close()
 
 
 def close_all_mcp_urls() -> None:
-    urls = list(_persistent_pools.keys())
+    with _persistent_pools_lock:
+        urls = list(_persistent_pools.keys())
     for url in urls:
         close_mcp_url(url)
 
