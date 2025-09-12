@@ -1,7 +1,7 @@
 """Test suite for MCP tools integration."""
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, AsyncMock
 
 from vaul import Toolkit
 from vaul.mcp import (
@@ -202,41 +202,76 @@ class TestMCPHelpers:
 class TestMCPToolsCreation:
     """Test MCP tool creation functions."""
     
-    @patch('vaul.mcp._run_async')
-    def test_tools_from_mcp_session(self, mock_run_async):
+    def test_tools_from_mcp_session(self):
         """Test creating tools from an MCP session."""
         session = Mock()
-        mock_tools = [Mock(), Mock()]
-        mock_run_async.return_value = mock_tools
-        
-        result = tools_from_mcp(session)
-        
-        assert result == mock_tools
-        assert mock_run_async.called
+        async def fake_list_tools():
+            class Tool:
+                name = "t"
+                description = ""
+                inputSchema = {}
+            class Resp:
+                tools = [Tool()]
+            return Resp()
+        session.list_tools = AsyncMock(side_effect=fake_list_tools)
+        session.call_tool = AsyncMock(return_value=Mock(content=[Mock(text="ok")]))
+        tools = tools_from_mcp(session)
+        assert isinstance(tools, list)
     
-    @patch('vaul.mcp._run_async')
-    @patch('vaul.mcp.sse_client')
-    def test_tools_from_mcp_url_with_headers(self, mock_sse_client, mock_run_async):
+    @patch('vaul.mcp._get_pool')
+    def test_tools_from_mcp_url_with_headers(self, mock_get_pool):
         """Test creating tools from URL with headers."""
-        mock_tools = [Mock()]
-        mock_run_async.return_value = mock_tools
-        
+        fake_pool = Mock()
+        fake_pool.list_tools_async = AsyncMock()
+        class Tool:
+            name = "u"
+            description = ""
+            inputSchema = {}
+        resp = Mock()
+        resp.tools = [Tool()]
+        fake_pool.list_tools_async.return_value = resp
+        fake_pool.call_tool_async = AsyncMock(return_value=Mock(content=[Mock(text="x")]))
+        mock_get_pool.return_value = fake_pool
+
         result = tools_from_mcp_url("https://example.com", {"Auth": "Bearer token"})
-        
-        assert result == mock_tools
-        assert mock_run_async.called
+        assert isinstance(result, list)
+        assert len(result) == 1
     
-    @patch('vaul.mcp._run_async')
+    @patch('vaul.mcp.ClientSession')
     @patch('vaul.mcp.stdio_client')
-    def test_tools_from_mcp_stdio_with_env(self, mock_stdio_client, mock_run_async):
+    def test_tools_from_mcp_stdio_with_env(self, mock_stdio_client, mock_client_session):
         """Test creating tools from stdio with environment variables."""
-        mock_tools = [Mock()]
-        mock_run_async.return_value = mock_tools
+        class StdIoCM:
+            async def __aenter__(self):
+                return (Mock(), Mock())
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+        mock_stdio_client.return_value = StdIoCM()
+
+        class SessCM:
+            async def __aenter__(self):
+                s = Mock()
+                s.initialize = AsyncMock()
+                class Tool:
+                    name = "s"
+                    description = ""
+                    inputSchema = {}
+                async def list_tools():
+                    class R:
+                        pass
+                    r = R()
+                    r.tools = [Tool()]
+                    return r
+                s.list_tools = AsyncMock(side_effect=list_tools)
+                s.call_tool = AsyncMock(return_value=Mock(content=[Mock(text="ret")]))
+                return s
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+        mock_client_session.side_effect = lambda r, w: SessCM()
         
         result = tools_from_mcp_stdio("node", ["server.js"], {"NODE_ENV": "test"})
-        
-        assert result == mock_tools
-        assert mock_run_async.called
+        assert isinstance(result, list)
+        assert len(result) == 1
 
 
 class TestMCPResultExtraction:
