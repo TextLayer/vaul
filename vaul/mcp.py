@@ -39,13 +39,27 @@ def _run_async(coro: Any) -> Any:
 
 def _extract_tool_metadata(tool: Any) -> tuple[str, str, dict]:
     """Extract name, description, and schema from various tool formats."""
-    name = getattr(tool, "name", None) or (tool.get("name", "") if isinstance(tool, dict) else "")
+    name = getattr(tool, "name", None)
+    if not name and hasattr(tool, "get"):
+        name = tool.get("name", "")  # type: ignore[assignment]
+    if not name and isinstance(tool, dict):
+        name = tool.get("name", "")
     if not name:
         raise ValueError("Tool must have a name")
-    description = getattr(tool, "description", "") or (tool.get("description", "") if isinstance(tool, dict) else "")
+
+    description = getattr(tool, "description", "")
+    if not description and hasattr(tool, "get"):
+        description = tool.get("description", "")  # type: ignore[assignment]
+    if not description and isinstance(tool, dict):
+        description = tool.get("description", "")
+
     schema: dict = {}
     for attr in ("inputSchema", "input_schema", "parameters"):
-        schema = getattr(tool, attr, None) or (tool.get(attr, {}) if isinstance(tool, dict) else {})
+        schema = getattr(tool, attr, None) or {}
+        if not schema and hasattr(tool, "get"):
+            schema = tool.get(attr, {})  # type: ignore[assignment]
+        if not schema and isinstance(tool, dict):
+            schema = tool.get(attr, {})
         if schema:
             break
     return name, description, schema
@@ -121,6 +135,7 @@ async def _load_tools_async(
 
 
 _persistent_pools: dict[str, "_PersistentSSEPool"] = {}
+_persistent_pools_lock = threading.RLock()
 
 
 class _PersistentSSEPool:
@@ -135,8 +150,15 @@ class _PersistentSSEPool:
         self._sess_ctx = None
         self.session: Any = None
         self._lock: Optional[asyncio.Lock] = None
+        self._init_ok = False
+        self._close_lock = threading.Lock()
         self.thread.start()
-        self._ready.wait()
+        if not self._ready.wait(timeout=10):
+            self.close()
+            raise RuntimeError("MCP SSE pool initialization timed out")
+        if not self._init_ok:
+            self.close()
+            raise RuntimeError("MCP SSE pool failed to initialize")
 
     def _loop_thread(self):
         asyncio.set_event_loop(self.loop)
@@ -144,13 +166,20 @@ class _PersistentSSEPool:
         self.loop.run_forever()
 
     async def _open(self):
-        self._sse_ctx = sse_client(self.url, headers=self.headers)
-        read, write = await self._sse_ctx.__aenter__()
-        self._sess_ctx = ClientSession(read, write)
-        self.session = await self._sess_ctx.__aenter__()
-        await self.session.initialize()
-        self._lock = asyncio.Lock()
-        self._ready.set()
+        ok = False
+        try:
+            self._sse_ctx = sse_client(self.url, headers=self.headers)
+            read, write = await asyncio.wait_for(self._sse_ctx.__aenter__(), timeout=10)
+            self._sess_ctx = ClientSession(read, write)
+            self.session = await asyncio.wait_for(self._sess_ctx.__aenter__(), timeout=10)
+            await asyncio.wait_for(self.session.initialize(), timeout=10)
+            self._lock = asyncio.Lock()
+            ok = True
+        finally:
+            self._init_ok = ok
+            self._ready.set()
+            if not ok:
+                self.loop.stop()
 
     async def _call_tool(self, name: str, arguments: dict):
         assert self.session is not None and self._lock is not None
@@ -163,11 +192,15 @@ class _PersistentSSEPool:
             return await self.session.list_tools()
 
     def call_tool_async(self, name: str, arguments: dict):
+        if self._closed.is_set():
+            raise RuntimeError("MCP connection is closed")
         coro = self._call_tool(name, arguments)
         cfut = asyncio.run_coroutine_threadsafe(coro, self.loop)
         return asyncio.wrap_future(cfut)
 
     def list_tools_async(self):
+        if self._closed.is_set():
+            raise RuntimeError("MCP connection is closed")
         coro = self._list_tools()
         cfut = asyncio.run_coroutine_threadsafe(coro, self.loop)
         return asyncio.wrap_future(cfut)
@@ -175,38 +208,46 @@ class _PersistentSSEPool:
     def close(self):
         if self._closed.is_set():
             return
+        with self._close_lock:
+            if self._closed.is_set():
+                return
 
-        async def _shutdown():
-            try:
-                if self._sess_ctx is not None:
-                    await self._sess_ctx.__aexit__(None, None, None)
-                if self._sse_ctx is not None:
-                    await self._sse_ctx.__aexit__(None, None, None)
-            finally:
-                self.loop.stop()
+            async def _shutdown():
+                try:
+                    if self._sess_ctx is not None:
+                        await self._sess_ctx.__aexit__(None, None, None)
+                    if self._sse_ctx is not None:
+                        await self._sse_ctx.__aexit__(None, None, None)
+                finally:
+                    self.loop.stop()
 
-        fut = asyncio.run_coroutine_threadsafe(_shutdown(), self.loop)
-        fut.result()
-        self.thread.join(timeout=2)
-        self._closed.set()
+            fut = asyncio.run_coroutine_threadsafe(_shutdown(), self.loop)
+            fut.result()
+            self.thread.join(timeout=2)
+            self._closed.set()
 
 
 def _get_pool(url: str, headers: dict[str, str]) -> _PersistentSSEPool:
-    pool = _persistent_pools.get(url)
-    if pool is None:
-        pool = _PersistentSSEPool(url, headers)
-        _persistent_pools[url] = pool
-    return pool
+    with _persistent_pools_lock:
+        pool = _persistent_pools.get(url)
+        if pool is None or getattr(pool, "_closed", None) is not None and pool._closed.is_set():
+            if pool is not None:
+                _persistent_pools.pop(url, None)
+            pool = _PersistentSSEPool(url, headers)
+            _persistent_pools[url] = pool
+        return pool
 
 
 def close_mcp_url(url: str) -> None:
-    pool = _persistent_pools.pop(url, None)
+    with _persistent_pools_lock:
+        pool = _persistent_pools.pop(url, None)
     if pool:
         pool.close()
 
 
 def close_all_mcp_urls() -> None:
-    urls = list(_persistent_pools.keys())
+    with _persistent_pools_lock:
+        urls = list(_persistent_pools.keys())
     for url in urls:
         close_mcp_url(url)
 
@@ -228,9 +269,9 @@ def tools_from_mcp_url(
     hidden_context: Dict[str, Any] = {},
 ) -> List[ToolCall]:
     hdrs = dict(headers or {})
-    pool = _get_pool(url, hdrs)
 
     async def load():
+        pool = _get_pool(url, hdrs)
         resp = await pool.list_tools_async()
         tools_data = _parse_tools_response(resp)
 
