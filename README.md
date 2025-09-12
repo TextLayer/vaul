@@ -1,3 +1,19 @@
+# MCP: Inject hidden context (not exposed to LLM)
+
+You can add per-URL hidden context that will be merged into every MCP tool invocation without changing the tool schemas (so the LLM doesn't need to provide these fields).
+
+Example:
+```python
+from vaul import Toolkit
+
+toolkit = Toolkit()
+toolkit.add_mcp("http://localhost:8001", hidden_context={"user_id": "123", "trace_id": "abc"})
+
+# LLM/tool call only supplies visible args
+result = toolkit.run_tool("some_remote_tool", {"arg": "value"})
+# The MCP server receives: {"arg": "value", "user_id": "123", "trace_id": "abc"}
+```
+
 # Vaul
 
 ![Black Background](black-bg.png)
