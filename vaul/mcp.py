@@ -39,13 +39,27 @@ def _run_async(coro: Any) -> Any:
 
 def _extract_tool_metadata(tool: Any) -> tuple[str, str, dict]:
     """Extract name, description, and schema from various tool formats."""
-    name = getattr(tool, "name", None) or (tool.get("name", "") if isinstance(tool, dict) else "")
+    name = getattr(tool, "name", None)
+    if not name and hasattr(tool, "get"):
+        name = tool.get("name", "")  # type: ignore[assignment]
+    if not name and isinstance(tool, dict):
+        name = tool.get("name", "")
     if not name:
         raise ValueError("Tool must have a name")
-    description = getattr(tool, "description", "") or (tool.get("description", "") if isinstance(tool, dict) else "")
+
+    description = getattr(tool, "description", "")
+    if not description and hasattr(tool, "get"):
+        description = tool.get("description", "")  # type: ignore[assignment]
+    if not description and isinstance(tool, dict):
+        description = tool.get("description", "")
+
     schema: dict = {}
     for attr in ("inputSchema", "input_schema", "parameters"):
-        schema = getattr(tool, attr, None) or (tool.get(attr, {}) if isinstance(tool, dict) else {})
+        schema = getattr(tool, attr, None) or {}
+        if not schema and hasattr(tool, "get"):
+            schema = tool.get(attr, {})  # type: ignore[assignment]
+        if not schema and isinstance(tool, dict):
+            schema = tool.get(attr, {})
         if schema:
             break
     return name, description, schema
