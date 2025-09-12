@@ -266,9 +266,10 @@ def tools_from_mcp(session: ClientSession) -> List[ToolCall]:
 def tools_from_mcp_url(
     url: str,
     headers: Dict[str, str] | None = None,
-    hidden_context: Dict[str, Any] = {},
+    hidden_context: Dict[str, Any] | None = None,
 ) -> List[ToolCall]:
     hdrs = dict(headers or {})
+    hidden = dict(hidden_context or {})
 
     async def load():
         pool = _get_pool(url, hdrs)
@@ -278,7 +279,7 @@ def tools_from_mcp_url(
         def create_tool(tool_md: Any) -> ToolCall:
             def create_async_call(name: str):
                 async def call(**kwargs):
-                    merged = {**kwargs, **hidden_context}
+                    merged = {**kwargs, **hidden}
                     result = await pool.call_tool_async(name, merged)
                     return _extract_result_content(result)
                 return call
