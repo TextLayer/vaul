@@ -67,6 +67,15 @@ class TestPersistentSSEPoolBehavior:
         names = {t.func.__name__ for t in tools}
         assert names == {"t1", "t2"}
 
+    def test_close_mcp_url_is_idempotent(self):
+        fake_pool = Mock()
+        fake_pool.close = Mock()
+        _persistent_pools["http://b"] = fake_pool
+
+        close_mcp_url("http://b")
+        close_mcp_url("http://b")
+        fake_pool.close.assert_called_once()
+
 
 class TestPoolLifecycle:
     def setup_method(self):

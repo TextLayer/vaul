@@ -151,6 +151,7 @@ class _PersistentSSEPool:
         self.session: Any = None
         self._lock: Optional[asyncio.Lock] = None
         self._init_ok = False
+        self._close_lock = threading.Lock()
         self.thread.start()
         if not self._ready.wait(timeout=10):
             self.close()
@@ -203,20 +204,23 @@ class _PersistentSSEPool:
     def close(self):
         if self._closed.is_set():
             return
+        with self._close_lock:
+            if self._closed.is_set():
+                return
 
-        async def _shutdown():
-            try:
-                if self._sess_ctx is not None:
-                    await self._sess_ctx.__aexit__(None, None, None)
-                if self._sse_ctx is not None:
-                    await self._sse_ctx.__aexit__(None, None, None)
-            finally:
-                self.loop.stop()
+            async def _shutdown():
+                try:
+                    if self._sess_ctx is not None:
+                        await self._sess_ctx.__aexit__(None, None, None)
+                    if self._sse_ctx is not None:
+                        await self._sse_ctx.__aexit__(None, None, None)
+                finally:
+                    self.loop.stop()
 
-        fut = asyncio.run_coroutine_threadsafe(_shutdown(), self.loop)
-        fut.result()
-        self.thread.join(timeout=2)
-        self._closed.set()
+            fut = asyncio.run_coroutine_threadsafe(_shutdown(), self.loop)
+            fut.result()
+            self.thread.join(timeout=2)
+            self._closed.set()
 
 
 def _get_pool(url: str, headers: dict[str, str]) -> _PersistentSSEPool:
