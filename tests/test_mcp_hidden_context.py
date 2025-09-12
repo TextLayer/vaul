@@ -19,7 +19,7 @@ def test_hidden_context_merge_precedence(mock_get_pool):
     fake_pool.call_tool_async = AsyncMock(return_value=Mock(content=[Mock(text="ok")]))
     mock_get_pool.return_value = fake_pool
 
-    tools = tools_from_mcp_url("http://u", hidden_context={"a": 1, "b": 2})
+    tools = tools_from_mcp_url("http://mock-test.com", hidden_context={"a": 1, "b": 2})
     t = tools[0]
     out = t.run({"a": 9, "c": 3})
     assert out == "ok"
@@ -42,9 +42,9 @@ def test_hidden_context_no_mutable_default_bleed(mock_get_pool):
     fake_pool.call_tool_async = AsyncMock(return_value=Mock(content=[Mock(text="ok")]))
     mock_get_pool.return_value = fake_pool
 
-    tools1 = tools_from_mcp_url("http://u1")
+    tools1 = tools_from_mcp_url("http://mock-test.com/u1")
     tools1[0].run({})
-    tools2 = tools_from_mcp_url("http://u2", hidden_context={"x": "y"})
+    tools2 = tools_from_mcp_url("http://mock-test.com/u2", hidden_context={"x": "y"})
     tools2[0].run({})
 
     calls = fake_pool.call_tool_async.await_args_list
@@ -71,7 +71,7 @@ def test_schema_not_exposing_hidden_context(mock_get_pool):
     fake_pool.call_tool_async = AsyncMock(return_value=Mock(content=[Mock(text="ok")]))
     mock_get_pool.return_value = fake_pool
 
-    tools = tools_from_mcp_url("http://u", hidden_context={"secret": "s"})
+    tools = tools_from_mcp_url("http://mock-test.com", hidden_context={"secret": "s"})
     t = tools[0]
     schema = getattr(t, "tool_call_schema", {})
     params = schema.get("parameters", {})

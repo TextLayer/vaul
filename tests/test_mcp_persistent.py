@@ -23,7 +23,7 @@ class TestPersistentSSEPoolBehavior:
         fake_pool.list_tools_async.return_value = fake_list_resp
         mock_get_pool.return_value = fake_pool
 
-        tools = tools_from_mcp_url("https://example.com/mcp", {"Auth": "X"})
+        tools = tools_from_mcp_url("http://mock-test.com/mcp", {"Auth": "X"})
         assert len(tools) == 1
         tool = tools[0]
         assert tool.func.__name__ == "remote_echo"
@@ -63,17 +63,17 @@ class TestPersistentSSEPoolBehavior:
         fake_pool.call_tool_async = AsyncMock()
         mock_get_pool.return_value = fake_pool
 
-        tools = tools_from_mcp_url("http://server")
+        tools = tools_from_mcp_url("http://mock-test.com/server")
         names = {t.func.__name__ for t in tools}
         assert names == {"t1", "t2"}
 
     def test_close_mcp_url_is_idempotent(self):
         fake_pool = Mock()
         fake_pool.close = Mock()
-        _persistent_pools["http://b"] = fake_pool
+        _persistent_pools["http://mock-test.com/b"] = fake_pool
 
-        close_mcp_url("http://b")
-        close_mcp_url("http://b")
+        close_mcp_url("http://mock-test.com/b")
+        close_mcp_url("http://mock-test.com/b")
         fake_pool.close.assert_called_once()
 class TestClosedGuardsAndRecreate:
     def setup_method(self):
@@ -86,12 +86,12 @@ class TestClosedGuardsAndRecreate:
                 self._closed = Mock()
                 self._closed.is_set.return_value = True
         closed = ClosedDummy()
-        _persistent_pools["http://u"] = closed
+        _persistent_pools["http://mock-test.com/u"] = closed
         new_inst = Mock()
         mock_pool_cls.return_value = new_inst
-        p = _get_pool("http://u", {})
+        p = _get_pool("http://mock-test.com/u", {})
         assert p is new_inst
-        assert _persistent_pools["http://u"] is new_inst
+        assert _persistent_pools["http://mock-test.com/u"] is new_inst
 
 
 
@@ -102,10 +102,10 @@ class TestPoolLifecycle:
     def test_close_mcp_url_closes_and_removes(self):
         fake_pool = Mock()
         fake_pool.close = Mock()
-        _persistent_pools["http://a"] = fake_pool
+        _persistent_pools["http://mock-test.com/a"] = fake_pool
 
-        close_mcp_url("http://a")
-        assert "http://a" not in _persistent_pools
+        close_mcp_url("http://mock-test.com/a")
+        assert "http://mock-test.com/a" not in _persistent_pools
         fake_pool.close.assert_called_once()
 
     def test_close_all_mcp_urls_closes_each(self):
@@ -152,4 +152,4 @@ class TestMCPInitFailure:
     @patch('vaul.mcp._PersistentSSEPool', side_effect=RuntimeError("init fail"))
     def test_tools_from_mcp_url_init_failure(self, _mock_pool):
         with pytest.raises(RuntimeError, match="init fail"):
-            tools_from_mcp_url("http://bad")
+            tools_from_mcp_url("http://mock-test.com/bad")
