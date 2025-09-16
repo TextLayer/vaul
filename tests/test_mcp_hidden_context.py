@@ -8,13 +8,14 @@ def test_hidden_context_merge_precedence(mock_get_pool):
     fake_pool = Mock()
     fake_pool.list_tools_async = AsyncMock()
 
-    class Tool:
-        name = "merge_tool"
-        description = ""
-        inputSchema = {}
+    tool_meta = {
+        "name": "merge_tool",
+        "description": "",
+        "inputSchema": {},
+    }
 
     resp = Mock()
-    resp.tools = [Tool()]
+    resp.tools = [tool_meta]
     fake_pool.list_tools_async.return_value = resp
     fake_pool.call_tool_async = AsyncMock(return_value=Mock(content=[Mock(text="ok")]))
     mock_get_pool.return_value = fake_pool
@@ -31,13 +32,14 @@ def test_hidden_context_no_mutable_default_bleed(mock_get_pool):
     fake_pool = Mock()
     fake_pool.list_tools_async = AsyncMock()
 
-    class Tool:
-        name = "t"
-        description = ""
-        inputSchema = {}
+    tool_meta = {
+        "name": "t",
+        "description": "",
+        "inputSchema": {},
+    }
 
     resp = Mock()
-    resp.tools = [Tool()]
+    resp.tools = [tool_meta]
     fake_pool.list_tools_async.return_value = resp
     fake_pool.call_tool_async = AsyncMock(return_value=Mock(content=[Mock(text="ok")]))
     mock_get_pool.return_value = fake_pool
@@ -60,13 +62,14 @@ def test_schema_not_exposing_hidden_context(mock_get_pool):
     fake_pool = Mock()
     fake_pool.list_tools_async = AsyncMock()
 
-    class Tool:
-        name = "t"
-        description = ""
-        inputSchema = {"type": "object", "properties": {"p": {"type": "string"}}}
+    tool_meta = {
+        "name": "t",
+        "description": "",
+        "inputSchema": {"type": "object", "properties": {"p": {"type": "string"}}},
+    }
 
     resp = Mock()
-    resp.tools = [Tool()]
+    resp.tools = [tool_meta]
     fake_pool.list_tools_async.return_value = resp
     fake_pool.call_tool_async = AsyncMock(return_value=Mock(content=[Mock(text="ok")]))
     mock_get_pool.return_value = fake_pool

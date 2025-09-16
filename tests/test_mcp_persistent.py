@@ -13,13 +13,14 @@ class TestPersistentSSEPoolBehavior:
         fake_pool.list_tools_async = AsyncMock()
         fake_pool.call_tool_async = AsyncMock()
 
-        class ToolMeta:
-            name = "remote_echo"
-            description = "Echoes"
-            inputSchema = {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}
+        tool_meta = {
+            "name": "remote_echo",
+            "description": "Echoes",
+            "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+        }
 
         fake_list_resp = Mock()
-        fake_list_resp.tools = [ToolMeta()]
+        fake_list_resp.tools = [tool_meta]
         fake_pool.list_tools_async.return_value = fake_list_resp
         mock_get_pool.return_value = fake_pool
 
@@ -47,18 +48,11 @@ class TestPersistentSSEPoolBehavior:
         fake_pool = Mock()
         fake_pool.list_tools_async = AsyncMock()
 
-        class T1:
-            name = "t1"
-            description = ""
-            inputSchema = {}
-
-        class T2:
-            name = "t2"
-            description = ""
-            inputSchema = {}
+        t1 = {"name": "t1", "description": "", "inputSchema": {}}
+        t2 = {"name": "t2", "description": "", "inputSchema": {}}
 
         resp = Mock()
-        resp.tools = [T1(), T2()]
+        resp.tools = [t1, t2]
         fake_pool.list_tools_async.return_value = resp
         fake_pool.call_tool_async = AsyncMock()
         mock_get_pool.return_value = fake_pool
