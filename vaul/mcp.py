@@ -269,7 +269,7 @@ def tools_from_mcp_url(
     hidden_context: Dict[str, Any] | None = None,
 ) -> List[ToolCall]:
     hdrs = dict(headers or {})
-    hidden = dict(hidden_context or {})
+    hidden = dict(hidden_context) if hidden_context is not None else {}
 
     async def load():
         pool = _get_pool(url, hdrs)
