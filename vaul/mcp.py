@@ -268,11 +268,11 @@ def tools_from_mcp_url(
     headers: Dict[str, str] | None = None,
     hidden_context: Dict[str, Any] | None = None,
 ) -> List[ToolCall]:
-    hdrs = dict(headers or {})
+    sanitised_headers = dict(headers or {})
     hidden = dict(hidden_context) if hidden_context is not None else {}
 
     async def load():
-        pool = _get_pool(url, hdrs)
+        pool = _get_pool(url, sanitised_headers)
         resp = await pool.list_tools_async()
         tools_data = _parse_tools_response(resp)
 
