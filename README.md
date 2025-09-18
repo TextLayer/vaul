@@ -779,7 +779,7 @@ for tool_name in toolkit.tool_names:
         print(f"Parameters: {tool.mcp_tool.inputSchema}")
 ```
 
-# Inject hidden context with MCP
+#### Inject hidden context with MCP
 
 You can add per-URL hidden context that will be merged into every MCP tool invocation without changing the tool schemas so the LLM doesn't need to provide these fields.
 
